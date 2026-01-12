@@ -1,0 +1,5 @@
+hard_tabs = false
+brace_style = "SameLineWhere"
+tab_spaces = 2
+fn_args_layout = "Tall"
+use_small_heuristics = "Max"
