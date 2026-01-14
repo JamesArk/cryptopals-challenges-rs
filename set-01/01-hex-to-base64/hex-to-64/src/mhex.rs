@@ -1,6 +1,7 @@
 use std::{
   char, fmt::Display
 };
+
 use byteorder::{BigEndian, ByteOrder};
 use itertools::Itertools;
 
@@ -92,8 +93,8 @@ pub fn hex_bytes_to_bytes(hex_bytes: &[u8]) -> Result<Vec<u8>, BadHexError> {
   Ok(res)
 }
 
-fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Vec<u8> {
-  let bin_codon = hex_bytes_to_bytes(hex_bytes).unwrap();
+fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Result<String,BadHexError> {
+  let bin_codon = hex_bytes_to_bytes(hex_bytes)?;
   let mut res:Vec<u8> = vec![0,0,0,0];
   if hex_bytes.len() == 6 {
     let bin_uint = BigEndian::read_u24(bin_codon.as_ref());
@@ -115,17 +116,20 @@ fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Vec<u8> {
     res[2] = b'=';
     res[3] = b'=';
   }
-  res
+
+  Ok(String::from_utf8(res).expect("Invalid UTF-8 for base 64 string"))
 }
 
 const BASE64_SYMBOLS: &[u8] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".as_bytes();
 
-pub fn hex_to_base64(hex_string: &str) -> Result<String, BadHexError> {
-  if hex_string.len() % 2 == 1 {
+pub fn hex_to_base64(hex_string_bin: &[u8]) -> Result<String, BadHexError> {
+  if hex_string_bin.len() % 2 == 1 {
     // we will assume we can only convert from complete 8 bit chunks (a byte)
     return Err(BadHexError { error_kind: BadHexErrorKind::BadSize, position: 0, character: '\0' });
   }
-  let res = hex_string.as_bytes().chunks(6).flat_map(hex_bytes_to_base64).collect();
-
-  return Ok(String::from_utf8(res).expect("base64 result is not utf8 valid"));
+  let res:Result<String,BadHexError> = hex_string_bin.chunks(6).map(hex_bytes_to_base64).collect();
+  return match res {
+    Ok(v) => Ok(v),
+    Err(err) => Err(err)
+  }
 }
