@@ -3,7 +3,6 @@ use std::{
 };
 
 use byteorder::{BigEndian, ByteOrder};
-use itertools::Itertools;
 
 #[derive(Debug, Clone)]
 enum BadHexErrorKind {
@@ -82,15 +81,11 @@ pub fn hex_bytes_to_bytes(hex_bytes: &[u8]) -> Result<Vec<u8>, BadHexError> {
     // we will assume we can only convert from complete 8 byte chunks
     return Err(BadHexError { error_kind: BadHexErrorKind::BadSize, position: 0, character: '\0' });
   }
-  let res = hex_bytes
+  Ok(hex_bytes
     .chunks(2)
     .enumerate()
-    .map(|(i, cs)| match get_hex_val(cs[0], cs[1], i) {
-      Ok(c) => c,
-      Err(e) => panic!("{}", e),
-    })
-    .collect_vec();
-  Ok(res)
+    .map(|(i, cs)| get_hex_val(cs[0], cs[1], i))
+    .collect::<Result<Vec<u8>,BadHexError>>()?)
 }
 
 fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Result<String,BadHexError> {
