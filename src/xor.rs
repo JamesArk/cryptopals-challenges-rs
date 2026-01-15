@@ -18,3 +18,8 @@ pub fn xor_bytes(a :&[u8], b :&[u8]) -> Result<Vec<u8>,XORMismatchSizeError> {
   }
   Ok(a.iter().zip(b).map(|(a,b)| a^b).collect_vec())
 }
+
+
+pub fn xor_single_byte(a :&[u8], b :u8) -> Vec<u8>{
+  a.iter().map(|c| c ^ b).collect()
+}
