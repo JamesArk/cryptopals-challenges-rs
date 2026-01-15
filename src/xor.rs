@@ -12,6 +12,7 @@ impl Display for XORMismatchSizeError {
   }
 }
 
+#[allow(dead_code)]
 pub fn xor_fixed_length(a :&[u8], b :&[u8]) -> Result<Vec<u8>,XORMismatchSizeError> {
   if a.len() != b.len() {
     return Err(XORMismatchSizeError{})
@@ -22,4 +23,12 @@ pub fn xor_fixed_length(a :&[u8], b :&[u8]) -> Result<Vec<u8>,XORMismatchSizeErr
 
 pub fn xor_single_byte(a :&[u8], b :u8) -> Vec<u8>{
   a.iter().map(|c| c ^ b).collect()
+}
+#[allow(dead_code)]
+pub fn xor_repeating_key(key :&[u8], x:&[u8]) -> Vec<u8> {
+  let mut res = vec![0;x.len()];
+  for i in 0..x.len(){
+    res[i] = key[i % key.len()] ^ x[i];
+  }
+  res
 }

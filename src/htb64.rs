@@ -70,6 +70,7 @@ pub fn hex_bytes_to_bytes(hex_bytes: &[u8]) -> Result<Vec<u8>, BadHexError> {
       .collect::<Result<Vec<u8>, BadHexError>>()
 }
 
+#[allow(dead_code)]
 fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Result<String, BadHexError> {
   let bin_codon = hex_bytes_to_bytes(hex_bytes)?;
   let mut res: Vec<u8> = vec![0, 0, 0, 0];
@@ -99,6 +100,7 @@ fn hex_bytes_to_base64(hex_bytes: &[u8]) -> Result<String, BadHexError> {
 const BASE64_SYMBOLS: &[u8] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".as_bytes();
 
+#[allow(dead_code)]
 pub fn hex_to_base64(hex_string_bin: &[u8]) -> Result<String, BadHexError> {
   if hex_string_bin.len() % 2 == 1 {
     // we will assume we can only convert from complete 8 bit chunks (a byte)

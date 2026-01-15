@@ -2,3 +2,4 @@ test/
 target/
 input_*.txt
 output_*.txt
+notes*.txt
