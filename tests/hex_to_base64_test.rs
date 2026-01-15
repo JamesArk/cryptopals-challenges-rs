@@ -43,3 +43,11 @@ fn big_hex() {
   println!("Actual {}", res_string);
   assert!(res_string == real_res)
 }
+
+#[test]
+fn cryptopals_challenge_set_01_challenge_01() {
+  let input = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
+  let res = htb64::hex_to_base64(input.as_bytes());
+  assert!(res.is_ok());
+  assert!(res.unwrap() == "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t")
+}
