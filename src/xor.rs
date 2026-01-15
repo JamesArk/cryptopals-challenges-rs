@@ -12,7 +12,7 @@ impl Display for XORMismatchSizeError {
   }
 }
 
-pub fn xor_bytes(a :&[u8], b :&[u8]) -> Result<Vec<u8>,XORMismatchSizeError> {
+pub fn xor_fixed_length(a :&[u8], b :&[u8]) -> Result<Vec<u8>,XORMismatchSizeError> {
   if a.len() != b.len() {
     return Err(XORMismatchSizeError{})
   }

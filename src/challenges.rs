@@ -44,7 +44,7 @@ pub fn character_frequency_score(sample: String) -> f64 {
 pub fn challenge_3_set_01() {
   let input = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736".to_owned();
   let chars = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".to_owned();
-  let valid = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '-/.,%@!?*()[]{}\"|;:\t~`+=#";
+  let valid = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~";
   let cipher = htb64::hex_bytes_to_bytes(input.as_bytes()).unwrap();
   let mut table: BTreeMap<u8, f64> = BTreeMap::new();
   for c in chars.as_bytes() {
