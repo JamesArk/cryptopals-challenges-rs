@@ -1,5 +1,5 @@
 use base64::{Engine, prelude::BASE64_STANDARD};
-use cryptopalls_challeges_rs::htb64;
+use cryptopals_challeges_rs::htb64;
 use rand::seq::IndexedRandom;
 
 #[test]

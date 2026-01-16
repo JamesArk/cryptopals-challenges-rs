@@ -1,4 +1,4 @@
-use cryptopalls_challeges_rs::xor;
+use cryptopals_challeges_rs::xor;
 
 
 #[test]
@@ -33,7 +33,7 @@ fn big_xor() {
 }
 
 #[test]
-fn cryptopals_challenge_set_01_challenge_02() {
+fn cryptopals_challenge_02() {
   let input1 = hex::decode("1c0111001f010100061a024b53535009181c").unwrap();
   let input2 = hex::decode("686974207468652062756c6c277320657965").unwrap();
   let res = xor::xor_fixed_length(&input1, &input2);

@@ -1,4 +1,4 @@
-use cryptopalls_challeges_rs::xor;
+use cryptopals_challeges_rs::xor;
 
 #[test]
 fn simple_key() {

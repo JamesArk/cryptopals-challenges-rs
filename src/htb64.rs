@@ -1,5 +1,4 @@
 use std::{char, fmt::Display};
-
 use byteorder::{BigEndian, ByteOrder};
 
 #[derive(Debug, Clone)]

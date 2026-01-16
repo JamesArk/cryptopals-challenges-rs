@@ -3,6 +3,10 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
+use cryptopals_challeges_rs::distance::hamming_distance;
+
 use crate::xor;
 
 use crate::htb64;
@@ -36,7 +40,8 @@ pub fn character_frequency_score(sample: String) -> f64 {
     (b'Q', 0.12),
     (b'Z', 0.074),
   ]);
-  sample.to_ascii_uppercase()
+  sample
+    .to_ascii_uppercase()
     .as_bytes()
     .iter()
     .map(|c| freq_table.get(c).unwrap_or(&0.0).clone())
@@ -44,7 +49,7 @@ pub fn character_frequency_score(sample: String) -> f64 {
 }
 
 #[allow(dead_code)]
-pub fn challenge_3_set_01() {
+pub fn challenge_3() {
   let input = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736".to_owned();
   let chars = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n".to_owned();
   let valid = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n";
@@ -66,46 +71,105 @@ pub fn challenge_3_set_01() {
     println!("Character: '{}' | Score:{:.5}", String::from_utf8(vec![k.clone()]).unwrap(), v);
     println!("Attempt: {:?}", String::from_utf8(xor::xor_single_byte(&cipher, k.clone())).unwrap())
   }
-
 }
 
 #[allow(dead_code)]
-pub fn challenge_4_set_01(){
-  let input_file = "./res/challenge_4_set_01_extended.txt";
-  // let input_file = "./res/challenge_4_set_01.txt";
+pub fn challenge_4() {
+  let input_file = "./res/challenge_4_extended.txt";
+  // let input_file = "./res/challenge_4.txt";
   let chars = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n".to_owned();
   let valid = "abcdefghijklmnopqrstuvewxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n";
-  let mut candidates_table:BTreeMap<(usize,String),Vec<(u8,f64,String)>> = BTreeMap::new();
-  let reader = BufReader::new(File::open(input_file).expect("Failed to open challenge 4 set 01 input file.")).lines().enumerate();
+  let mut candidates_table: BTreeMap<(usize, String), Vec<(u8, f64, String)>> = BTreeMap::new();
+  let reader =
+    BufReader::new(File::open(input_file).expect("Failed to open challenge 4 set 01 input file."))
+      .lines()
+      .enumerate();
 
-  for (idx,l) in reader {
+  for (idx, l) in reader {
     let line = l.expect("Failed to read line from challenge 4 set 01 input file.");
-    let cipher_text = htb64::hex_bytes_to_bytes(line.as_bytes()).expect("Invalid Hexadecimal string");
-    let mut valid_attempts:Vec<(u8,f64,String)> = Vec::new();
+    let cipher_text =
+      htb64::hex_bytes_to_bytes(line.as_bytes()).expect("Invalid Hexadecimal string");
+    let mut valid_attempts: Vec<(u8, f64, String)> = Vec::new();
     for c in chars.as_bytes() {
       let attempt = String::from_utf8(xor::xor_single_byte(&cipher_text, c.clone()));
       if let Ok(s) = attempt {
-        if s.chars().any(|v| !valid.contains(v)){
+        if s.chars().any(|v| !valid.contains(v)) {
           continue;
         }
-        valid_attempts.push((c.clone(),character_frequency_score(s.clone()),s));
+        valid_attempts.push((c.clone(), character_frequency_score(s.clone()), s));
       }
     }
     if !valid_attempts.is_empty() {
-      valid_attempts.sort_by(|&(_,s1,_),&(_,s2,_)| s1.total_cmp(&s2).reverse());
-      candidates_table.insert((idx,line), valid_attempts);
+      valid_attempts.sort_by(|&(_, s1, _), &(_, s2, _)| s1.total_cmp(&s2).reverse());
+      candidates_table.insert((idx, line), valid_attempts);
     }
   }
-  for ((idx,k),v) in candidates_table {
+  for ((idx, k), v) in candidates_table {
     if v[0].1 < 90.0 {
-      continue
+      continue;
     }
-    println!("Line Number: {}\nLine hex: '{}'\nTop Score: {:.5}\nTop Plaintext Attempt: {:?}",idx,k,v[0].1,v[0].2);
+    println!(
+      "Line Number: {}\nLine hex: '{}'\nTop Score: {:.5}\nTop Plaintext Attempt: {:?}",
+      idx, k, v[0].1, v[0].2
+    );
     print!("Candidates: [\n");
-    let top_3_candidates = &v[0..(if v.len() <= 3 { v.len() } else { 3 } )];
-    for (k,s,p) in  top_3_candidates {
-      println!("Key: '{}' | Score: {:.5} | Plaintext: {:?}",String::from_utf8(vec![k.clone()]).unwrap(),s,p);
+    let top_3_candidates = &v[0..(if v.len() <= 3 { v.len() } else { 3 })];
+    for (k, s, p) in top_3_candidates {
+      println!(
+        "Key: '{}' | Score: {:.5} | Plaintext: {:?}",
+        String::from_utf8(vec![k.clone()]).unwrap(),
+        s,
+        p
+      );
     }
     println!("]\n------------------------------------");
   }
+}
+
+#[allow(dead_code)]
+pub fn challenge_6() {
+  let input_file = "./res/challenge_6.txt";
+
+  let lines =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 6"))
+      .lines();
+  let content: Vec<u8> = lines
+    .into_iter()
+    .map(|v| {
+      v.expect("Failed to read line from challenge 6 input file").bytes().collect::<Vec<u8>>()
+    })
+    .flatten()
+    .collect();
+
+  let content_bytes = BASE64_STANDARD
+    .decode(content)
+    .expect("Failed to decode Base64 string from input file for challenge 6");
+  let key_sizes = 2..=40;
+
+  let mut scores: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+  for ks in key_sizes {
+
+    let sample: Vec<&[u8]> = content_bytes
+      .chunks(ks)
+      .enumerate()
+      .take_while(|v| v.0 < 30)
+      .map(|(_, v)| v).collect()
+    ;
+    let s = sample
+      .chunks(2)
+      .map(|v| {
+        hamming_distance(v[0], v[1])
+          .expect("Failed to calculate hamming distance between two vecs of bytes in challenge 6")
+      })
+      .reduce(|v1, v2| v1 + v2)
+      .unwrap_or_default()*1000
+      / (15*ks as u32);
+    scores.entry(s).or_default().push(ks);
+  }
+  println!("Scores:");
+  for v in scores {
+    println!("{:?}", v);
+  }
+
+
 }
