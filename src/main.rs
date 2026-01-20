@@ -4,7 +4,8 @@
 mod challenges;
 mod htb64;
 mod xor;
+mod cryptog;
 
 fn main() {
-  challenges::challenge_6();
+  challenges::challenge_7();
 }

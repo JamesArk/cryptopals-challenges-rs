@@ -9,6 +9,7 @@ use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use cryptopals_challeges_rs::distance::hamming_distance;
 
+use crate::cryptog;
 use crate::xor;
 
 use crate::htb64;
@@ -216,4 +217,26 @@ pub fn challenge_6() {
     }
   }
   println!("Key size:{:?}\nKey: {:?}\nPlaintext:\n{}\n---------------------------",best_solution.1,best_solution.2.0,best_solution.2.1);
+}
+
+
+pub fn challenge_7() {
+  let input_file = "./res/challenge_7.txt";
+  let lines =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 7"))
+      .lines();
+  let base64_ciphertext: Vec<u8> = lines
+    .into_iter()
+    .map(|v| {
+      v.expect("Failed to read line from challenge 7 input file").bytes().collect::<Vec<u8>>()
+    })
+    .flatten()
+    .collect();
+
+  let ciphertext_bytes = BASE64_STANDARD
+    .decode(base64_ciphertext)
+    .expect("Failed to decode Base64 string from input file for challenge 7");
+
+  let plaintext = cryptog::aes_128_ecb_decrypt("YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).expect("Failed to decrypt input file from challenge 7");
+  println!("Plaintext:\n{}\n-------------------------------------",String::from_utf8(plaintext).unwrap());
 }
