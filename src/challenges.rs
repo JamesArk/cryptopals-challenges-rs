@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::u32;
+use std::usize;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -43,21 +45,19 @@ pub fn character_frequency_score(sample: String) -> u64 {
     (b'Q', 12),
     (b'Z', 7),
   ]);
-  let mut sample_freq_table:HashMap<u8, u64> = HashMap::new();
+  let mut sample_freq_table: HashMap<u8, u64> = HashMap::new();
   let size = sample.len();
-  sample
-    .to_ascii_uppercase()
-    .as_bytes()
+  sample.to_ascii_uppercase().as_bytes().iter().filter(|c| c.is_ascii_alphabetic()).for_each(|c| {
+    sample_freq_table.entry(c.to_ascii_uppercase()).and_modify(|v| *v += 1).or_insert(1);
+  });
+
+  freq_table
     .iter()
-    .filter(|c| c.is_ascii_alphabetic())
-    .for_each(|c| {
-      sample_freq_table.entry(c.to_ascii_uppercase()).and_modify(|v| *v+=1).or_insert(1);});
-
-  freq_table.iter().map(|(k,score)| {
-    let count = sample_freq_table.get(k).unwrap_or(&0);
-    score*count/size as u64
-  }).sum::<u64>()
-
+    .map(|(k, score)| {
+      let count = sample_freq_table.get(k).unwrap_or(&0);
+      score * count / size as u64
+    })
+    .sum::<u64>()
 }
 
 #[allow(dead_code)]
@@ -175,51 +175,52 @@ pub fn challenge_6() {
       / (15 * ks as u32);
     scores.entry(s).or_default().push(ks);
   }
-  let top:Vec<usize> = scores.iter().take(5).map(|(_,v)| v).flatten().copied().collect();
+  let top: Vec<usize> = scores.iter().take(5).map(|(_, v)| v).flatten().copied().collect();
   // top 5 scores and their key sizes
-  let mut solutions_table: BTreeMap<usize, (String,String)> = BTreeMap::new();
+  let mut solutions_table: BTreeMap<usize, (String, String)> = BTreeMap::new();
   for size in top {
-    let mut cols: Vec<Vec<u8>> = vec![vec![];size];
+    let mut cols: Vec<Vec<u8>> = vec![vec![]; size];
     for idx in 0..ciphertext_bytes.len() {
-      cols[idx%size].push(ciphertext_bytes[idx]);
+      cols[idx % size].push(ciphertext_bytes[idx]);
     }
-    let mut key:Vec<u8> = vec![];
+    let mut key: Vec<u8> = vec![];
     for column in cols {
-      let mut char_scores:Vec<(u64,u8)> = Vec::new();
+      let mut char_scores: Vec<(u64, u8)> = Vec::new();
       for c in chars.as_bytes() {
-        let attempt = String::from_utf8(xor::xor_single_byte(&column,*c));
+        let attempt = String::from_utf8(xor::xor_single_byte(&column, *c));
         if let Ok(s) = attempt {
-          if s.chars().any(|v| !valid_chars.contains(v)){
+          if s.chars().any(|v| !valid_chars.contains(v)) {
             continue;
           }
-          char_scores.push((character_frequency_score(s),*c));
-
+          char_scores.push((character_frequency_score(s), *c));
         }
       }
       if char_scores.is_empty() {
         continue;
       }
-      char_scores.sort_by(|(s1,_),(s2,_)| s1.cmp(s2).reverse());
-      let (_,best) = char_scores[0];
+      char_scores.sort_by(|(s1, _), (s2, _)| s1.cmp(s2).reverse());
+      let (_, best) = char_scores[0];
       key.append(&mut vec![best]);
     }
     if !key.is_empty() {
       let plaintext = String::from_utf8(xor::xor_repeating_key(&key, &ciphertext_bytes)).unwrap();
-      solutions_table.insert(size, (String::from_utf8(key).unwrap(),plaintext));
+      solutions_table.insert(size, (String::from_utf8(key).unwrap(), plaintext));
     }
   }
-  let mut best_solution:(u64,usize,(String,String)) = (0,0,("".to_owned(),"".to_owned()));
-  for (key_size,(key,plaintext)) in solutions_table {
+  let mut best_solution: (u64, usize, (String, String)) = (0, 0, ("".to_owned(), "".to_owned()));
+  for (key_size, (key, plaintext)) in solutions_table {
     let score = character_frequency_score(plaintext.clone());
 
     if best_solution.0 < score {
-      best_solution = (score,key_size,(key,plaintext));
+      best_solution = (score, key_size, (key, plaintext));
     }
   }
-  println!("Key size:{:?}\nKey: {:?}\nPlaintext:\n{}\n---------------------------",best_solution.1,best_solution.2.0,best_solution.2.1);
+  println!(
+    "Key size:{:?}\nKey: {:?}\nPlaintext:\n{}\n---------------------------",
+    best_solution.1, best_solution.2.0, best_solution.2.1
+  );
 }
-
-
+#[allow(dead_code)]
 pub fn challenge_7() {
   let input_file = "./res/challenge_7.txt";
   let lines =
@@ -237,6 +238,41 @@ pub fn challenge_7() {
     .decode(base64_ciphertext)
     .expect("Failed to decode Base64 string from input file for challenge 7");
 
-  let plaintext = cryptog::aes_128_ecb_decrypt("YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).expect("Failed to decrypt input file from challenge 7");
-  println!("Plaintext:\n{}\n-------------------------------------",String::from_utf8(plaintext).unwrap());
+  let plaintext = cryptog::aes_128_ecb_decrypt("YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes)
+    .expect("Failed to decrypt input file from challenge 7");
+  println!(
+    "Plaintext:\n{}\n-------------------------------------",
+    String::from_utf8(plaintext).unwrap()
+  );
+}
+
+#[allow(dead_code)]
+pub fn challenge_8() {
+  let input_file = "./res/challenge_8.txt";
+  let lines =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 8"))
+      .lines();
+
+  let lines_bytes: Vec<Vec<u8>> = lines
+    .map(|line| {
+      htb64::hex_bytes_to_bytes(
+        line.expect("Failed to read line from input file for challenge 8").as_bytes(),
+      )
+      .expect("Failed to hex decode line from input file from challenge 8")
+    })
+    .collect();
+  let mut best_guess_idx = 0;
+  let mut best_guess_len = 0;
+  for (idx, line_bytes) in lines_bytes.iter().enumerate() {
+    let vec_chunks:Vec<&[u8]> = line_bytes.chunks(16).collect();
+    let size = vec_chunks.len();
+    let chunks:HashSet<&[u8]> = HashSet::from_iter(vec_chunks.into_iter());
+    if chunks.len() == size {
+      continue;
+    }
+    best_guess_idx = idx;
+    best_guess_len = chunks.len();
+  }
+
+  println!("Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",best_guess_idx,best_guess_len,);
 }
