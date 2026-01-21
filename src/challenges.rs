@@ -10,6 +10,7 @@ use base64::prelude::BASE64_STANDARD;
 use cryptopals_challeges_rs::distance::hamming_distance;
 
 use crate::cryptog;
+use crate::cryptog::encryption_oracle;
 use crate::xor;
 
 use crate::htb64;
@@ -291,4 +292,22 @@ pub fn challenge_10() {
     .expect("Failed to decode Base64 string from input file for challenge 10");
   let plaintext_bytes = cryptog::aes_cbc_decrypt(&[0;16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
   println!("{}",String::from_utf8(plaintext_bytes).unwrap());
+}
+
+#[allow(dead_code)]
+pub fn challenge_11() {
+  let mut input = "SEVENTYSEVEN".to_owned();
+  input = input.repeat(10);
+  let (ciphertext,mode) = encryption_oracle(input.clone());
+  let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
+  let set :HashSet<String>= HashSet::from_iter(ciphertext_hex.as_bytes().chunks(12).map(|v| String::from_utf8(v.to_vec()).unwrap()));
+  let res: Vec<u8> = set.iter().flat_map(|v| v.as_bytes()).copied().collect();
+  let guess = if res.len() != ciphertext_hex.len(){ "ECB".to_owned() } else {"CBC".to_owned()};
+  println!("Guess: {}\nMode: {}",guess,mode);
+  if guess != mode {
+    panic!();
+  }
+
+
+
 }

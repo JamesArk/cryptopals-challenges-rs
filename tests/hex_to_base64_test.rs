@@ -51,3 +51,23 @@ fn cryptopals_challenge_set_01_challenge_01() {
   assert!(res.is_ok());
   assert!(res.unwrap() == "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t")
 }
+
+
+#[test]
+fn small_bin_to_hex() {
+  let input = hex::decode("ABCDEF0123456789").unwrap();
+  let res = htb64::bytes_to_hex(&input);
+  assert!(res == "ABCDEF0123456789");
+}
+
+
+#[test]
+fn big_bin_to_hex() {
+  let input = rand::random_iter().take(1024).collect::<Vec<u8>>();
+  let expected = hex::encode(input.clone());
+
+  let res = htb64::bytes_to_hex(&input);
+  dbg!(res.clone());
+  dbg!(expected.clone().to_ascii_uppercase());
+  assert!(res == expected.to_ascii_uppercase());
+}

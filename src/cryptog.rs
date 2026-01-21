@@ -2,6 +2,7 @@ use openssl::{
   error::ErrorStack,
   symm::{Cipher, Crypter},
 };
+use rand::Rng;
 
 use crate::xor::{self, xor_fixed_length};
 
@@ -65,4 +66,25 @@ pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u
   let size = plaintext.len();
   let padding_guess = plaintext[size - 1];
   Ok(plaintext.into_iter().take(size - padding_guess as usize).collect())
+}
+
+
+pub fn encryption_oracle(plaintext :String) -> (Vec<u8>,String) {
+  let rng = &mut rand::rng();
+  let mut plaintext_bytes = plaintext.as_bytes().to_owned();
+  let prefix_size = rng.random_range(5..=10);
+  let postfix_size = rng.random_range(5..=10);
+  let mut prefix:Vec<u8> = rng.random_iter().take(prefix_size).collect();
+  let mut postfix:Vec<u8> = rng.random_iter().take(postfix_size).collect();
+  prefix.append(&mut plaintext_bytes);
+  prefix.append(&mut postfix);
+  plaintext_bytes = prefix;
+
+  let key:Vec<u8> = rng.random_iter().take(16).collect();
+  if rng.random_bool(0.5){
+    (aes_cbc_encrypt(&rng.random_iter().take(16).collect::<Vec<u8>>(), &key, &plaintext_bytes).unwrap(),"CBC".to_owned())
+  }else{
+    (aes_128_ecb_encrypt(&key, &pkcs7_padding(plaintext_bytes, 16)).unwrap(),"ECB".to_owned())
+  }
+
 }
