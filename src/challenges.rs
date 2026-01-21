@@ -4,8 +4,6 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::u32;
-use std::usize;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -73,7 +71,7 @@ pub fn challenge_3() {
       if s.chars().any(|ch| !valid.contains(ch)) {
         continue;
       }
-      table.insert(c.clone(), character_frequency_score(s));
+      table.insert(*c, character_frequency_score(s));
     }
   }
   let mut res = Vec::from_iter(table);
@@ -124,7 +122,7 @@ pub fn challenge_4() {
       "Line Number: {}\nLine hex: '{}'\nTop Score: {:.5}\nTop Plaintext Attempt: {:?}",
       idx, k, v[0].1, v[0].2
     );
-    print!("Candidates: [\n");
+    println!("Candidates: [");
     let top_3_candidates = &v[0..(if v.len() <= 3 { v.len() } else { 3 })];
     for (k, s, p) in top_3_candidates {
       println!(
@@ -149,10 +147,9 @@ pub fn challenge_6() {
       .lines();
   let base64_ciphertext: Vec<u8> = lines
     .into_iter()
-    .map(|v| {
+    .flat_map(|v| {
       v.expect("Failed to read line from challenge 6 input file").bytes().collect::<Vec<u8>>()
     })
-    .flatten()
     .collect();
 
   let ciphertext_bytes = BASE64_STANDARD
@@ -175,7 +172,7 @@ pub fn challenge_6() {
       / (15 * ks as u32);
     scores.entry(s).or_default().push(ks);
   }
-  let top: Vec<usize> = scores.iter().take(5).map(|(_, v)| v).flatten().copied().collect();
+  let top: Vec<usize> = scores.iter().take(5).flat_map(|(_, v)| v).copied().collect();
   // top 5 scores and their key sizes
   let mut solutions_table: BTreeMap<usize, (String, String)> = BTreeMap::new();
   for size in top {
@@ -228,10 +225,9 @@ pub fn challenge_7() {
       .lines();
   let base64_ciphertext: Vec<u8> = lines
     .into_iter()
-    .map(|v| {
+    .flat_map(|v| {
       v.expect("Failed to read line from challenge 7 input file").bytes().collect::<Vec<u8>>()
     })
-    .flatten()
     .collect();
 
   let ciphertext_bytes = BASE64_STANDARD
@@ -285,15 +281,14 @@ pub fn challenge_10() {
       .lines();
   let base64_ciphertext: Vec<u8> = lines
     .into_iter()
-    .map(|v| {
+    .flat_map(|v| {
       v.expect("Failed to read line from challenge 10 input file").bytes().collect::<Vec<u8>>()
     })
-    .flatten()
     .collect();
 
   let ciphertext_bytes = BASE64_STANDARD
     .decode(base64_ciphertext)
     .expect("Failed to decode Base64 string from input file for challenge 10");
-  let plaintext_bytes = cryptog::aes_cbc_decrypt(&vec![0;16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
+  let plaintext_bytes = cryptog::aes_cbc_decrypt(&[0;16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
   println!("{}",String::from_utf8(plaintext_bytes).unwrap());
 }

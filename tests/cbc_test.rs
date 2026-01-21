@@ -16,7 +16,15 @@ fn small_plaintext() {
 
 #[test]
 fn big_plaintext() {
-  let input = "What's so hard about good-byes?I'm sorry, I'm just not as keen on planning out our perfect lives when I'm only 19. I am happy to be only all that you see.";
+  let input = "
+What's so hard about good-byes?
+I'm sorry, I'm just not as keen on planning out
+Our perfect lives
+When I'm only 19
+I am happy to be
+Only all that you see
+An I'm not one to learn
+To be the same";
   let key:Vec<u8> = rand::random_iter().take(16).collect();
   let iv:Vec<u8> = rand::random_iter().take(16).collect();
   let ciphertext = aes_cbc_encrypt(&iv, &key, input.as_bytes());
