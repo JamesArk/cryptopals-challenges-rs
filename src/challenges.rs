@@ -276,3 +276,24 @@ pub fn challenge_8() {
 
   println!("Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",best_guess_idx,best_guess_len,);
 }
+
+#[allow(dead_code)]
+pub fn challenge_10() {
+  let input_file = "./res/challenge_10.txt";
+  let lines =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 10"))
+      .lines();
+  let base64_ciphertext: Vec<u8> = lines
+    .into_iter()
+    .map(|v| {
+      v.expect("Failed to read line from challenge 10 input file").bytes().collect::<Vec<u8>>()
+    })
+    .flatten()
+    .collect();
+
+  let ciphertext_bytes = BASE64_STANDARD
+    .decode(base64_ciphertext)
+    .expect("Failed to decode Base64 string from input file for challenge 10");
+  let plaintext_bytes = cryptog::aes_cbc_decrypt(&vec![0;16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
+  println!("{}",String::from_utf8(plaintext_bytes).unwrap());
+}
