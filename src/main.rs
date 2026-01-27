@@ -7,5 +7,5 @@ mod xor;
 mod cryptog;
 
 fn main() {
-  challenges::challenge_11();
+  challenges::challenge_12();
 }
