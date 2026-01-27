@@ -10,8 +10,7 @@ use base64::prelude::BASE64_STANDARD;
 use cryptopals_challeges_rs::distance::hamming_distance;
 
 use crate::cryptog;
-use crate::cryptog::consistent_encryption_oracle;
-use crate::cryptog::encryption_oracle;
+use crate::oracle;
 use crate::xor;
 
 use crate::htb64;
@@ -299,7 +298,7 @@ pub fn challenge_10() {
 pub fn challenge_11() {
   let mut input = "SEVENTYSEVEN".to_owned();
   input = input.repeat(10);
-  let (ciphertext,mode) = encryption_oracle(input.clone());
+  let (ciphertext,mode) = oracle::encryption_oracle(input.clone());
   let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
   let set :HashSet<String>= HashSet::from_iter(ciphertext_hex.as_bytes().chunks("SEVENTYSEVEN".len()*2).map(|v| String::from_utf8(v.to_vec()).unwrap()));
   let res: Vec<u8> = set.iter().flat_map(|v| v.as_bytes()).copied().collect();
@@ -312,28 +311,14 @@ pub fn challenge_11() {
 
 #[allow(dead_code)]
 pub fn challenge_12() {
-  let consistent_oracle_key_base64: Vec<u8> = BufReader::new(
-    File::open("./res/challenge_12_oracle_key.txt")
-      .expect("Failed to open oracle key for challenge 12"),
-  ).lines()
-  .into_iter()
-  .flat_map(|v| {
-    v.expect("Failed to read line from oracle key file for challenge 12")
-      .bytes()
-      .collect::<Vec<u8>>()
-  })
-  .collect();
-
-  let consistent_oracle_key = BASE64_STANDARD
-    .decode(consistent_oracle_key_base64)
-    .expect("Failed to decode consistent oracle key for challenge 12");
+  let consistent_oracle_key:Vec<u8> = rand::random_iter().take(16).collect();
 
   let mut key_size_guess = 0;
   let mut last_size = 0;
 
   for input_size in 1..=64 {
     let plaintext = "A".repeat(input_size);
-    let ciphertext = consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
+    let ciphertext = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
     let hex_ciphertext = htb64::bytes_to_hex(&ciphertext);
     if last_size < hex_ciphertext.len()/2usize {
       key_size_guess = hex_ciphertext.len()/2usize - last_size;
@@ -341,19 +326,18 @@ pub fn challenge_12() {
     }
   }
   let mut unknown_string_size = 0;
-  let base_size = consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len();
+  let base_size = oracle::consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len();
   for input_size in 1..=key_size_guess {
     let plaintext = "A".repeat(input_size);
-    let len = consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key).len();
+    let len = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key).len();
     if len != base_size {
       unknown_string_size = base_size - input_size;
       break;
     }
   }
 
-  let mut input = "SEVENTYSEVEN".to_owned();
-  input = input.repeat(10);
-  let ciphertext = consistent_encryption_oracle(input.clone().as_bytes(),&consistent_oracle_key);
+  let input = "SEVENTYSEVEN".to_owned().repeat(10);
+  let ciphertext = oracle::consistent_encryption_oracle(input.as_bytes(),&consistent_oracle_key);
   let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
   let set :HashSet<String>= HashSet::from_iter(ciphertext_hex.as_bytes().chunks(key_size_guess*2).map(|v| String::from_utf8(v.to_vec()).unwrap()));
   let res: Vec<u8> = set.iter().flat_map(|v| v.as_bytes()).copied().collect();
@@ -363,9 +347,10 @@ pub fn challenge_12() {
 
   println!("Key size guess: {} bytes",key_size_guess);
   println!("Unknown string guess size: {} bytes",unknown_string_size);
-  // first block
+
+
   let mut dict:HashMap<String,Vec<u8>> = HashMap::new();
-  let unknown_string_blocks = consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len()/key_size_guess - 1;
+  let unknown_string_blocks = oracle::consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len()/key_size_guess - 1;
   let mut solution = "".to_owned();
   let mut last_block = "A".repeat(key_size_guess);
   for block in 0..unknown_string_blocks {
@@ -374,11 +359,11 @@ pub fn challenge_12() {
 
     for _ in 1..= key_size_guess {
       guess_string = guess_string.chars().skip(1).collect();
-      let target_ciphertext = consistent_encryption_oracle(guess_string.as_bytes(), &consistent_oracle_key);
+      let target_ciphertext = oracle::consistent_encryption_oracle(guess_string.as_bytes(), &consistent_oracle_key);
       for c in 0..=255u8 {
         let mut pt = (guess_string.clone() + &known_string).as_bytes().to_owned();
         pt.push(c);
-        let guess_ciphertext = consistent_encryption_oracle(&pt, &consistent_oracle_key);
+        let guess_ciphertext = oracle::consistent_encryption_oracle(&pt, &consistent_oracle_key);
         let block: &[u8] = &guess_ciphertext[0..key_size_guess];
         dict.insert(htb64::bytes_to_hex(&block),pt);
       }
@@ -393,13 +378,13 @@ pub fn challenge_12() {
   let remaining = unknown_string_size - solution.len();
   let mut known_string = "".to_owned();
   let mut plaintext:String = solution.chars().skip(solution.len()- (key_size_guess)).collect();
-  for _ in 1..=remaining {
+  for _ in 0..remaining {
     plaintext = plaintext.chars().skip(1).collect();
-    let target_ciphertext = consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
+    let target_ciphertext = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
     for c in 0..=255u8 {
       let mut pt = (plaintext.clone() + &known_string).as_bytes().to_owned();
       pt.push(c);
-      let guess_ciphertext = consistent_encryption_oracle(&pt, &consistent_oracle_key);
+      let guess_ciphertext = oracle::consistent_encryption_oracle(&pt, &consistent_oracle_key);
       let block: &[u8] = &guess_ciphertext[0..key_size_guess];
       dict.insert(htb64::bytes_to_hex(&block),pt);
     }
@@ -407,5 +392,7 @@ pub fn challenge_12() {
     known_string.push(char::from_u32(sol[sol.len()-1] as u32).unwrap());
   }
   println!("Unknown String guess:");
+  println!("{}","-".repeat(20));
   print!("{}",solution + &known_string);
+  println!("{}","-".repeat(20));
 }
