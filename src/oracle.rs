@@ -1,7 +1,16 @@
+use std::collections::HashMap;
+
 use base64::{Engine, prelude::BASE64_STANDARD};
 use rand::Rng;
 
-use crate::cryptog::{aes_128_ecb_encrypt, aes_cbc_encrypt, pkcs7_padding};
+use crate::{cryptog::{aes_128_ecb_decrypt, aes_128_ecb_encrypt, aes_cbc_encrypt, pkcs7_padding, undo_pkcs7_padding}};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum CookieValue {
+  StringValue(String),
+  NumberValue(i64),
+  BoolValue(bool),
+}
 
 pub fn encryption_oracle(plaintext: String) -> (Vec<u8>, String) {
   let rng = &mut rand::rng();
@@ -34,7 +43,7 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &
       .expect("Failed to decode unknown base 64 string for challenge 12"),
   )
   .expect("Failed to create string based on unknown string for challenge 12");
-  let mut plaintext_bytes:Vec<u8> = Vec::with_capacity(input_bytes.len()+unknown_string.len());
+  let mut plaintext_bytes: Vec<u8> = Vec::with_capacity(input_bytes.len() + unknown_string.len());
   plaintext_bytes.append(&mut input_bytes.to_owned());
   plaintext_bytes.append(&mut unknown_string.as_bytes().to_owned());
 
@@ -43,4 +52,44 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &
     &pkcs7_padding(plaintext_bytes, consistent_oracle_key.len()),
   )
   .unwrap()
+}
+
+pub fn parse_cookie(input: String) -> HashMap<String, CookieValue> {
+  let mut res = HashMap::new();
+  let input_string: String = input.chars().filter(|c| !c.is_whitespace()).collect();
+  let props: Vec<&str> = input_string.split("&").filter(|v| v.contains("=")).collect();
+  for p in props {
+    let mut s = p.split("=");
+    let name = s.next().unwrap();
+    let value_string: String = s.collect();
+    let value = if value_string.parse::<i64>().is_ok() {
+      CookieValue::NumberValue(value_string.parse::<i64>().unwrap())
+    } else if value_string.parse::<bool>().is_ok() {
+      CookieValue::BoolValue(value_string.parse::<bool>().unwrap())
+    } else {
+      CookieValue::StringValue(value_string)
+    };
+    res.insert(name.to_owned(), value);
+  }
+  res
+}
+
+pub fn profile_for(email: String) -> String {
+  [
+    "email=".to_owned() + &email.replace("&", "").replace("=", ""),
+    "uid=10".to_owned(),
+    "role=user".to_owned(),
+  ]
+  .join("&")
+}
+
+pub fn oracle_create_token(email: String, key: &[u8]) -> Vec<u8> {
+  let token = profile_for(email);
+  aes_128_ecb_encrypt(key, &pkcs7_padding(token.as_bytes().to_owned(), key.len())).unwrap()
+
+}
+
+pub fn oracle_parse_token(token: &[u8], key: &[u8]) -> HashMap<String,CookieValue>{
+  let token_string = undo_pkcs7_padding(aes_128_ecb_decrypt(key, token).unwrap());
+  parse_cookie(String::from_utf8(token_string).unwrap())
 }

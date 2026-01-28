@@ -11,6 +11,8 @@ use cryptopals_challeges_rs::distance::hamming_distance;
 
 use crate::cryptog;
 use crate::oracle;
+use crate::oracle::oracle_create_token;
+use crate::oracle::oracle_parse_token;
 use crate::xor;
 
 use crate::htb64;
@@ -395,4 +397,19 @@ pub fn challenge_12() {
   println!("{}","-".repeat(20));
   print!("{}",solution + &known_string);
   println!("{}","-".repeat(20));
+}
+
+#[allow(dead_code)]
+pub fn challenge_13() {
+  let key:Vec<u8> = rand::random_iter().take(16).collect();
+  let mut fake_padding = "".to_owned();
+  fake_padding.push(char::from_u32(11).unwrap());
+  fake_padding = fake_padding.repeat(11);
+
+  let input_email = "foooo@bar.admin".to_owned() + &fake_padding + "com";
+  let mut ciphertext = oracle_create_token(input_email, &key);
+  let size = ciphertext.len();
+  ciphertext.copy_within(key.len()..key.len()*2, size-(key.len()));
+  let res = oracle_parse_token(&ciphertext, &key);
+  println!("{:#?}",res);
 }

@@ -35,6 +35,12 @@ pub fn pkcs7_padding(data: Vec<u8>, block_size: usize) -> Vec<u8> {
   res
 }
 
+pub fn undo_pkcs7_padding(plaintext: Vec<u8>) -> Vec<u8>{
+  let size = plaintext.len();
+  let padding_guess = plaintext[size - 1];
+  plaintext.into_iter().take(size - padding_guess as usize).collect()
+}
+
 #[allow(dead_code)]
 pub fn aes_cbc_encrypt(iv: &[u8], key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, ErrorStack> {
   let data = pkcs7_padding(plaintext.to_owned(), key.len());
@@ -62,7 +68,5 @@ pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u
     );
     prev_ciphertext = chunk.to_owned();
   }
-  let size = plaintext.len();
-  let padding_guess = plaintext[size - 1];
-  Ok(plaintext.into_iter().take(size - padding_guess as usize).collect())
+  Ok(undo_pkcs7_padding(plaintext))
 }
