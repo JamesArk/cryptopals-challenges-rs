@@ -1,12 +1,10 @@
-
-
-
 mod challenges;
-mod htb64;
-mod xor;
 mod cryptog;
+mod htb64;
 mod oracle;
+mod oracle_hacker;
+mod xor;
 
 fn main() {
-  challenges::challenge_13();
+  challenges::challenge_14();
 }

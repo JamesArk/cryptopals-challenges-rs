@@ -13,6 +13,8 @@ use crate::cryptog;
 use crate::oracle;
 use crate::oracle::oracle_create_token;
 use crate::oracle::oracle_parse_token;
+use crate::oracle_hacker;
+use crate::oracle_hacker::detect_ecb;
 use crate::xor;
 
 use crate::htb64;
@@ -263,9 +265,9 @@ pub fn challenge_8() {
   let mut best_guess_idx = 0;
   let mut best_guess_len = 0;
   for (idx, line_bytes) in lines_bytes.iter().enumerate() {
-    let vec_chunks:Vec<&[u8]> = line_bytes.chunks(16).collect();
+    let vec_chunks: Vec<&[u8]> = line_bytes.chunks(16).collect();
     let size = vec_chunks.len();
-    let chunks:HashSet<&[u8]> = HashSet::from_iter(vec_chunks.into_iter());
+    let chunks: HashSet<&[u8]> = HashSet::from_iter(vec_chunks.into_iter());
     if chunks.len() == size {
       continue;
     }
@@ -273,7 +275,10 @@ pub fn challenge_8() {
     best_guess_len = chunks.len();
   }
 
-  println!("Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",best_guess_idx,best_guess_len,);
+  println!(
+    "Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",
+    best_guess_idx, best_guess_len,
+  );
 }
 
 #[allow(dead_code)]
@@ -292,20 +297,19 @@ pub fn challenge_10() {
   let ciphertext_bytes = BASE64_STANDARD
     .decode(base64_ciphertext)
     .expect("Failed to decode Base64 string from input file for challenge 10");
-  let plaintext_bytes = cryptog::aes_cbc_decrypt(&[0;16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
-  println!("{}",String::from_utf8(plaintext_bytes).unwrap());
+  let plaintext_bytes =
+    cryptog::aes_cbc_decrypt(&[0; 16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
+  println!("{}", String::from_utf8(plaintext_bytes).unwrap());
 }
 
 #[allow(dead_code)]
 pub fn challenge_11() {
-  let mut input = "SEVENTYSEVEN".to_owned();
-  input = input.repeat(10);
-  let (ciphertext,mode) = oracle::encryption_oracle(input.clone());
-  let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
-  let set :HashSet<String>= HashSet::from_iter(ciphertext_hex.as_bytes().chunks("SEVENTYSEVEN".len()*2).map(|v| String::from_utf8(v.to_vec()).unwrap()));
-  let res: Vec<u8> = set.iter().flat_map(|v| v.as_bytes()).copied().collect();
-  let guess = if res.len() != ciphertext_hex.len(){ "ECB".to_owned() } else {"CBC".to_owned()};
-  println!("Guess: {}\nMode: {}",guess,mode);
+  let input = "SEVENTYSEVEN".to_owned().repeat(10);
+  let (ciphertext, mode) = oracle::encryption_oracle(input.clone());
+  let is_ecb = detect_ecb("SEVENTYSEVER".len(), &ciphertext);
+
+  let guess = if is_ecb { "ECB".to_owned() } else { "CBC".to_owned() };
+  println!("Guess: {}\nMode: {}", guess, mode);
   if guess != mode {
     panic!();
   }
@@ -313,95 +317,45 @@ pub fn challenge_11() {
 
 #[allow(dead_code)]
 pub fn challenge_12() {
-  let consistent_oracle_key:Vec<u8> = rand::random_iter().take(16).collect();
+  let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
 
-  let mut key_size_guess = 0;
-  let mut last_size = 0;
+  let key_size_guess =
+    oracle_hacker::guess_key_size(&oracle_key, oracle::consistent_encryption_oracle);
 
-  for input_size in 1..=64 {
-    let plaintext = "A".repeat(input_size);
-    let ciphertext = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
-    let hex_ciphertext = htb64::bytes_to_hex(&ciphertext);
-    if last_size < hex_ciphertext.len()/2usize {
-      key_size_guess = hex_ciphertext.len()/2usize - last_size;
-      last_size = hex_ciphertext.len()/2usize;
-    }
-  }
-  let mut unknown_string_size = 0;
-  let base_size = oracle::consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len();
-  for input_size in 1..=key_size_guess {
-    let plaintext = "A".repeat(input_size);
-    let len = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key).len();
-    if len != base_size {
-      unknown_string_size = base_size - input_size;
-      break;
-    }
-  }
-
-  let input = "SEVENTYSEVEN".to_owned().repeat(10);
-  let ciphertext = oracle::consistent_encryption_oracle(input.as_bytes(),&consistent_oracle_key);
-  let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
-  let set :HashSet<String>= HashSet::from_iter(ciphertext_hex.as_bytes().chunks(key_size_guess*2).map(|v| String::from_utf8(v.to_vec()).unwrap()));
-  let res: Vec<u8> = set.iter().flat_map(|v| v.as_bytes()).copied().collect();
-  if res.len() == ciphertext_hex.len(){
+  let unknown_string_size = oracle_hacker::guess_target_size(
+    key_size_guess,
+    &oracle_key,
+    oracle::consistent_encryption_oracle,
+  );
+  let input = "SEVENTYSEVEN".to_owned().repeat(20);
+  let ciphertext = oracle::consistent_encryption_oracle(input.as_bytes(), &oracle_key);
+  if !detect_ecb(key_size_guess, &ciphertext) {
     panic!("ECB mode not detected")
   }
 
-  println!("Key size guess: {} bytes",key_size_guess);
-  println!("Unknown string guess size: {} bytes",unknown_string_size);
+  let guess = oracle_hacker::guess_unknown_string(
+    key_size_guess,
+    oracle_hacker::guess_prefix_size(
+      key_size_guess,
+      &oracle_key,
+      oracle::consistent_encryption_oracle,
+    ),
+    unknown_string_size,
+    &oracle_key,
+    oracle::consistent_encryption_oracle,
+  );
 
-
-  let mut dict:HashMap<String,Vec<u8>> = HashMap::new();
-  let unknown_string_blocks = oracle::consistent_encryption_oracle("".as_bytes(), &consistent_oracle_key).len()/key_size_guess - 1;
-  let mut solution = "".to_owned();
-  let mut last_block = "A".repeat(key_size_guess);
-  for block in 0..unknown_string_blocks {
-    let mut known_string = "".to_owned();
-    let mut guess_string = last_block.clone();
-
-    for _ in 1..= key_size_guess {
-      guess_string = guess_string.chars().skip(1).collect();
-      let target_ciphertext = oracle::consistent_encryption_oracle(guess_string.as_bytes(), &consistent_oracle_key);
-      for c in 0..=255u8 {
-        let mut pt = (guess_string.clone() + &known_string).as_bytes().to_owned();
-        pt.push(c);
-        let guess_ciphertext = oracle::consistent_encryption_oracle(&pt, &consistent_oracle_key);
-        let block: &[u8] = &guess_ciphertext[0..key_size_guess];
-        dict.insert(htb64::bytes_to_hex(&block),pt);
-      }
-      let target_range = block*key_size_guess..(block+1)*key_size_guess;
-      let sol = dict.get(&htb64::bytes_to_hex(&target_ciphertext[target_range])).unwrap();
-      known_string.push(char::from_u32(sol[sol.len()-1] as u32).unwrap());
-    }
-    solution += &known_string;
-    last_block = known_string;
-  }
-
-  let remaining = unknown_string_size - solution.len();
-  let mut known_string = "".to_owned();
-  let mut plaintext:String = solution.chars().skip(solution.len()- (key_size_guess)).collect();
-  for _ in 0..remaining {
-    plaintext = plaintext.chars().skip(1).collect();
-    let target_ciphertext = oracle::consistent_encryption_oracle(plaintext.as_bytes(), &consistent_oracle_key);
-    for c in 0..=255u8 {
-      let mut pt = (plaintext.clone() + &known_string).as_bytes().to_owned();
-      pt.push(c);
-      let guess_ciphertext = oracle::consistent_encryption_oracle(&pt, &consistent_oracle_key);
-      let block: &[u8] = &guess_ciphertext[0..key_size_guess];
-      dict.insert(htb64::bytes_to_hex(&block),pt);
-    }
-    let sol = dict.get(&htb64::bytes_to_hex(&target_ciphertext[target_ciphertext.len()-key_size_guess*2..target_ciphertext.len()-key_size_guess*1])).unwrap();
-    known_string.push(char::from_u32(sol[sol.len()-1] as u32).unwrap());
-  }
+  println!("Key size guess: {} bytes", key_size_guess);
+  println!("Unknown string guess size: {} bytes", unknown_string_size);
   println!("Unknown String guess:");
-  println!("{}","-".repeat(20));
-  print!("{}",solution + &known_string);
-  println!("{}","-".repeat(20));
+  println!("{}", "-".repeat(20));
+  print!("{}", guess);
+  println!("{}", "-".repeat(20));
 }
 
 #[allow(dead_code)]
 pub fn challenge_13() {
-  let key:Vec<u8> = rand::random_iter().take(16).collect();
+  let key: Vec<u8> = rand::random_iter().take(16).collect();
   let mut fake_padding = "".to_owned();
   fake_padding.push(char::from_u32(11).unwrap());
   fake_padding = fake_padding.repeat(11);
@@ -409,7 +363,45 @@ pub fn challenge_13() {
   let input_email = "foooo@bar.admin".to_owned() + &fake_padding + "com";
   let mut ciphertext = oracle_create_token(input_email, &key);
   let size = ciphertext.len();
-  ciphertext.copy_within(key.len()..key.len()*2, size-(key.len()));
+  ciphertext.copy_within(key.len()..key.len() * 2, size - (key.len()));
   let res = oracle_parse_token(&ciphertext, &key);
-  println!("{:#?}",res);
+  println!("{:#?}", res);
+}
+
+#[allow(dead_code)]
+pub fn challenge_14() {
+  let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
+
+  let key_size_guess =
+    oracle_hacker::guess_key_size(&oracle_key, oracle::consistent_encryption_oracle_prefixed);
+
+  let unknown_string_size = oracle_hacker::guess_target_size(
+    key_size_guess,
+    &oracle_key,
+    oracle::consistent_encryption_oracle_prefixed,
+  );
+  let input = "SEVENTYSEVEN".to_owned().repeat(20);
+  let ciphertext = oracle::consistent_encryption_oracle_prefixed(input.as_bytes(), &oracle_key);
+  if !detect_ecb(key_size_guess, &ciphertext) {
+    panic!("ECB mode not detected")
+  }
+
+  let guess = oracle_hacker::guess_unknown_string(
+    key_size_guess,
+    oracle_hacker::guess_prefix_size(
+      key_size_guess,
+      &oracle_key,
+      oracle::consistent_encryption_oracle_prefixed,
+    ),
+    unknown_string_size,
+    &oracle_key,
+    oracle::consistent_encryption_oracle_prefixed,
+  );
+
+  println!("Key size guess: {} bytes", key_size_guess);
+  println!("Unknown string guess size: {} bytes", unknown_string_size);
+  println!("Unknown String guess:");
+  println!("{}", "-".repeat(20));
+  print!("{}", guess);
+  println!("{}", "-".repeat(20));
 }

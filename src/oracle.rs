@@ -54,6 +54,13 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &
   .unwrap()
 }
 
+pub fn consistent_encryption_oracle_prefixed(input_bytes: &[u8], consistent_oracle_key: &[u8]) -> Vec<u8> {
+  let prefix_length = 10;
+  let mut prefix:Vec<u8> = rand::random_iter().take(prefix_length).collect();
+  prefix.append(&mut input_bytes.to_owned());
+  consistent_encryption_oracle(&prefix, consistent_oracle_key)
+}
+
 pub fn parse_cookie(input: String) -> HashMap<String, CookieValue> {
   let mut res = HashMap::new();
   let input_string: String = input.chars().filter(|c| !c.is_whitespace()).collect();
