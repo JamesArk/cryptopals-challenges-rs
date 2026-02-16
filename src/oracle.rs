@@ -48,7 +48,7 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &
   plaintext_bytes.append(&mut unknown_string.as_bytes().to_owned());
 
   aes_128_ecb_encrypt(
-    &consistent_oracle_key,
+    consistent_oracle_key,
     &pkcs7_padding(plaintext_bytes, consistent_oracle_key.len()),
   )
   .unwrap()
@@ -97,6 +97,6 @@ pub fn oracle_create_token(email: String, key: &[u8]) -> Vec<u8> {
 }
 
 pub fn oracle_parse_token(token: &[u8], key: &[u8]) -> HashMap<String,CookieValue>{
-  let token_string = undo_pkcs7_padding(aes_128_ecb_decrypt(key, token).unwrap());
+  let token_string = undo_pkcs7_padding(&aes_128_ecb_decrypt(key, token).unwrap());
   parse_cookie(String::from_utf8(token_string).unwrap())
 }

@@ -79,7 +79,7 @@ pub fn bytes_to_hex(bytes :&[u8]) -> String{
       (0..=9,b) => String::from_utf8(vec![left|0b0011_0000,(b-9)|0b0100_0000]).unwrap(),
       (a,b) => String::from_utf8(vec![(a-9)|0b0100_0000,(b-9)|0b0100_0000]).unwrap(),
     };
-    return res
+    res
   }).collect::<String>()
 }
 

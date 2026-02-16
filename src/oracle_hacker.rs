@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use crate::htb64;
 
 pub fn detect_ecb(key_size: usize, ciphertext: &[u8]) -> bool {
-  let ciphertext_hex = htb64::bytes_to_hex(&ciphertext);
+  let ciphertext_hex = htb64::bytes_to_hex(ciphertext);
   let set: HashSet<String> = HashSet::from_iter(
     ciphertext_hex.as_bytes().chunks(key_size * 2).map(|v| String::from_utf8(v.to_vec()).unwrap()),
   );
@@ -12,7 +12,7 @@ pub fn detect_ecb(key_size: usize, ciphertext: &[u8]) -> bool {
 }
 
 pub fn guess_key_size(oracle_key: &[u8], oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>) -> usize {
-  let plaintext = "A".repeat(1);
+  let plaintext = "A".to_string();
   let ciphertext = oracle_fn(plaintext.as_bytes(), oracle_key);
   let hex_ciphertext = htb64::bytes_to_hex(&ciphertext);
   let last_size = hex_ciphertext.len() / 2usize;
@@ -33,35 +33,33 @@ pub fn guess_prefix_size(
   oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>,
 ) -> usize {
   let mut input: Vec<u8> = vec![key_size as u8];
-  let starting_size = oracle_fn(&input,oracle_key).len();
+  let starting_size = oracle_fn(&input, oracle_key).len();
   for _ in 1..=key_size {
     input.push(key_size as u8);
-    let size = oracle_fn(&input,oracle_key).len();
+    let size = oracle_fn(&input, oracle_key).len();
     if starting_size != size {
       break;
     }
   }
-  let target = htb64::bytes_to_hex(oracle_fn(&input,oracle_key).chunks(key_size).last().unwrap());
+  let target = htb64::bytes_to_hex(oracle_fn(&input, oracle_key).chunks(key_size).last().unwrap());
   input.clear();
 
   let mut first_block_idx = 0;
-  'outer:for _ in 1..(key_size*2) {
+  'outer: for _ in 1..(key_size * 2) {
     input.push(key_size as u8);
-    let ciphertext_hex_blocks:Vec<String> = oracle_fn(&input,oracle_key).chunks(key_size).map(|v| htb64::bytes_to_hex(v)).collect();
-    for idx in 0..(ciphertext_hex_blocks.len()-1) {
-      if ciphertext_hex_blocks[idx] == target {
+    let ciphertext_hex_blocks: Vec<String> =
+      oracle_fn(&input, oracle_key).chunks(key_size).map(htb64::bytes_to_hex).collect();
+    for (idx, block) in
+      ciphertext_hex_blocks.iter().enumerate().take(ciphertext_hex_blocks.len() - 1)
+    {
+      if *block == target {
         first_block_idx = idx;
         break 'outer;
       }
     }
   }
 
-  if first_block_idx > 0  {
-    return first_block_idx * key_size - (input.len() %key_size)
-  } else {
-      return 0
-  }
-
+  if first_block_idx > 0 { first_block_idx * key_size - (input.len() % key_size) } else { 0 }
 }
 
 pub fn guess_target_size(
@@ -70,7 +68,7 @@ pub fn guess_target_size(
   oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>,
 ) -> usize {
   let prefix_length = guess_prefix_size(key_size, oracle_key, oracle_fn);
-  let last_size = oracle_fn("A".repeat(1).as_bytes(), oracle_key).len();
+  let last_size = oracle_fn("A".as_bytes(), oracle_key).len();
   for i in 2..key_size {
     let total_size = oracle_fn("A".repeat(i).as_bytes(), oracle_key).len();
     if total_size != last_size {
@@ -92,16 +90,16 @@ pub fn guess_unknown_string(
 
   let mut input_buffer: VecDeque<u8> =
     VecDeque::from(vec![b'A'; prefix_padding + string_size + string_padding + key_size]);
-  let mut dictionary: HashMap<String,Vec<u8>> = HashMap::new();
+  let mut dictionary: HashMap<String, Vec<u8>> = HashMap::new();
   let mut solution = vec![];
   input_buffer.pop_back();
   for chars_found in 0..string_size {
-    let target_ciphertext: Vec<u8> = oracle_fn(&input_buffer.make_contiguous(), oracle_key)
+    let target_ciphertext: Vec<u8> = oracle_fn(input_buffer.make_contiguous(), oracle_key)
       .into_iter()
       .skip(prefix_size + input_buffer.len() - key_size + chars_found + 1)
       .take(key_size)
       .collect();
-    for c in solution.iter(){
+    for c in solution.iter() {
       input_buffer.push_back(*c);
     }
 
@@ -113,18 +111,24 @@ pub fn guess_unknown_string(
         .take(key_size)
         .collect();
       let input_size = input_buffer.len();
-      let guess_input:Vec<u8> = input_buffer.make_contiguous().iter().skip(input_size - key_size).take(key_size).copied().collect();
+      let guess_input: Vec<u8> = input_buffer
+        .make_contiguous()
+        .iter()
+        .skip(input_size - key_size)
+        .take(key_size)
+        .copied()
+        .collect();
       dictionary.insert(htb64::bytes_to_hex(&guess_ciphertext), guess_input);
       input_buffer.pop_back();
     }
-    for _ in solution.iter(){
+    for _ in solution.iter() {
       input_buffer.pop_back();
     }
     input_buffer.pop_front();
 
-    let sol = dictionary.get(&htb64::bytes_to_hex(&target_ciphertext)).unwrap().iter().last().unwrap();
+    let sol =
+      dictionary.get(&htb64::bytes_to_hex(&target_ciphertext)).unwrap().iter().last().unwrap();
     solution.push(*sol);
-
   }
   String::from_utf8(solution).unwrap()
 }

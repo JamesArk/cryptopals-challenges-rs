@@ -1,9 +1,13 @@
 use openssl::{
-  error::ErrorStack,
-  symm::{Cipher, Crypter},
+  error::ErrorStack, symm::{Cipher, Crypter}
 };
 
 use crate::xor::{self, xor_fixed_length};
+
+#[derive(Debug, Clone,PartialEq)]
+pub struct InvalidPadding {
+
+}
 
 #[allow(dead_code)]
 pub fn aes_128_ecb_encrypt(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>, ErrorStack> {
@@ -35,10 +39,22 @@ pub fn pkcs7_padding(data: Vec<u8>, block_size: usize) -> Vec<u8> {
   res
 }
 
-pub fn undo_pkcs7_padding(plaintext: Vec<u8>) -> Vec<u8>{
+pub fn undo_pkcs7_padding(plaintext: &[u8]) -> Vec<u8> {
   let size = plaintext.len();
   let padding_guess = plaintext[size - 1];
-  plaintext.into_iter().take(size - padding_guess as usize).collect()
+  plaintext.iter().take(size - padding_guess as usize).copied().collect()
+}
+
+#[allow(dead_code)]
+pub fn validate_undo_pkcs7_padding(plaintext: &[u8]) -> Result<Vec<u8>,InvalidPadding> {
+  let size = plaintext.len();
+  let padding_guess = plaintext[size - 1];
+  let padding:Vec<&u8> = plaintext.iter().skip(size-padding_guess as usize).take(padding_guess as usize).collect();
+  if padding.len() == padding_guess as usize && padding.iter().all(|v| **v == padding_guess) {
+    Ok(plaintext.iter().take(size - padding_guess as usize).copied().collect())
+  } else {
+    Err(InvalidPadding{})
+  }
 }
 
 #[allow(dead_code)]
@@ -55,7 +71,7 @@ pub fn aes_cbc_encrypt(iv: &[u8], key: &[u8], plaintext: &[u8]) -> Result<Vec<u8
   Ok(ciphertext)
 }
 
-#[allow(dead_code)]
+
 pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, ErrorStack> {
   let mut prev_ciphertext = iv.to_owned();
   let mut plaintext: Vec<u8> = Vec::new();
@@ -68,5 +84,5 @@ pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u
     );
     prev_ciphertext = chunk.to_owned();
   }
-  Ok(undo_pkcs7_padding(plaintext))
+  Ok(undo_pkcs7_padding(&plaintext))
 }
