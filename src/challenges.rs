@@ -411,18 +411,18 @@ pub fn challenge_16(){
   let oracle_key:Vec<u8> = rand::random_iter().take(16).collect();
   let oracle_iv:Vec<u8> = rand::random_iter().take(16).collect();
 
-  let attacker_plaintext = "something:admin<true".to_owned();
-  let mut encrypted_token = oracle::oracle_cbc_token(attacker_plaintext, &oracle_iv, &oracle_key).unwrap();
-
   let oracle_fn = |plaintext:&[u8],key:&[u8]| -> Vec<u8> {oracle::oracle_cbc_token(String::from_utf8(plaintext.to_owned()).unwrap(), &oracle_iv, &key).unwrap()};
   let key_size = oracle_hacker::guess_key_size(&oracle_key, oracle_fn);
   let prefix_size = oracle_hacker::guess_prefix_size_cbc(key_size, &oracle_key, oracle_fn);
 
-  let diff = prefix_size %key_size;
+  let attacker_plaintext = "A".repeat(key_size)+":admin<true";
+  let mut encrypted_token = oracle::oracle_cbc_token(attacker_plaintext, &oracle_iv, &oracle_key).unwrap();
+
+  let diff = prefix_size % key_size;
   let prefix_block = if prefix_size == 0 { 0 } else {prefix_size.div_ceil(key_size)-1};
 
-  encrypted_token[prefix_block * key_size + diff + 9] ^= 0b0000_00001;
-  encrypted_token[prefix_block * key_size + diff + 15] ^= 0b0000_00001;
+  encrypted_token[(prefix_block+1) * key_size + diff] ^= 0b0000_00001;
+  encrypted_token[(prefix_block+1) * key_size + diff + 6] ^= 0b0000_00001;
 
   println!("Admin priviliges: {}",oracle::oracle_cbc_is_admin(&encrypted_token, &oracle_iv, &oracle_key).unwrap());
 }
