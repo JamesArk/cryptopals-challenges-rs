@@ -1,4 +1,4 @@
-use cryptopals_challeges_rs::cryptog::{aes_cbc_decrypt, aes_cbc_encrypt};
+use cryptopals_challeges_rs::{cryptog::{aes_cbc_decrypt, aes_cbc_encrypt}, oracle};
 
 
 #[test]
@@ -56,4 +56,12 @@ fn wrong_key_size() {
   let iv:Vec<u8> = rand::random_iter().take(16).collect();
   let res = aes_cbc_encrypt(&iv, &key, &input);
   assert!(res.is_err());
+}
+
+#[test]
+fn format_attack_fails_cbc_oracle(){
+  let key:Vec<u8> = rand::random_iter().take(16).collect();
+  let iv:Vec<u8> = rand::random_iter().take(16).collect();
+  let ciphertext = oracle::oracle_cbc_token("something;admin=true".to_string(), &iv, &key).unwrap();
+  assert!(!oracle::oracle_cbc_is_admin(&ciphertext,&iv,&key).unwrap());
 }

@@ -11,7 +11,7 @@ pub fn detect_ecb(key_size: usize, ciphertext: &[u8]) -> bool {
   res.len() != ciphertext_hex.len()
 }
 
-pub fn guess_key_size(oracle_key: &[u8], oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>) -> usize {
+pub fn guess_key_size(oracle_key: &[u8], oracle_fn: impl Fn(&[u8], &[u8]) -> Vec<u8>) -> usize {
   let plaintext = "A".to_string();
   let ciphertext = oracle_fn(plaintext.as_bytes(), oracle_key);
   let hex_ciphertext = htb64::bytes_to_hex(&ciphertext);
@@ -30,7 +30,7 @@ pub fn guess_key_size(oracle_key: &[u8], oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>)
 pub fn guess_prefix_size(
   key_size: usize,
   oracle_key: &[u8],
-  oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>,
+  oracle_fn: impl Fn(&[u8], &[u8]) -> Vec<u8>,
 ) -> usize {
   let mut input: Vec<u8> = vec![key_size as u8];
   let starting_size = oracle_fn(&input, oracle_key).len();
@@ -65,9 +65,9 @@ pub fn guess_prefix_size(
 pub fn guess_target_size(
   key_size: usize,
   oracle_key: &[u8],
-  oracle_fn: fn(&[u8], &[u8]) -> Vec<u8>,
+  oracle_fn: impl Fn(&[u8], &[u8]) -> Vec<u8>,
 ) -> usize {
-  let prefix_length = guess_prefix_size(key_size, oracle_key, oracle_fn);
+  let prefix_length = guess_prefix_size(key_size, oracle_key, |u,v| oracle_fn(u,v));
   let last_size = oracle_fn("A".as_bytes(), oracle_key).len();
   for i in 2..key_size {
     let total_size = oracle_fn("A".repeat(i).as_bytes(), oracle_key).len();
@@ -131,4 +131,47 @@ pub fn guess_unknown_string(
     solution.push(*sol);
   }
   String::from_utf8(solution).unwrap()
+}
+
+
+pub fn guess_prefix_size_cbc(
+  key_size: usize,
+  oracle_key: &[u8],
+  oracle_fn: impl Fn(&[u8], &[u8]) -> Vec<u8>,
+) -> usize {
+  let mut input: Vec<u8> = vec![key_size as u8];
+  let starting_size = oracle_fn(&input, oracle_key).len();
+  for _ in 1..=key_size {
+    input.push(key_size as u8);
+    let size = oracle_fn(&input, oracle_key).len();
+    if starting_size != size {
+      break;
+    }
+  }
+  let ciphertext_hex_blocks: Vec<String> = oracle_fn(&input, oracle_key).chunks(key_size).map(htb64::bytes_to_hex).collect();
+  input[0] = 0;
+  let altered_ciphertext_hex_blocks: Vec<String> = oracle_fn(&input, oracle_key).chunks(key_size).map(htb64::bytes_to_hex).collect();
+
+  let mut known_prefix_blocks = 0;
+  for i in 0..ciphertext_hex_blocks.len() {
+    if ciphertext_hex_blocks[i] != altered_ciphertext_hex_blocks[i] {
+      break;
+    }
+    known_prefix_blocks+=1;
+  }
+  input[0] = key_size as u8;
+  input.append(&mut vec![key_size as u8;key_size]);
+  let ciphertext_hex_blocks: Vec<String> = oracle_fn(&input, oracle_key).chunks(key_size).map(htb64::bytes_to_hex).collect();
+
+  let skipped_bytes = 0;
+  for i in 0..input.len() {
+    input[i] = 0;
+    let altered_ciphertext_hex_blocks: Vec<String> = oracle_fn(&input, oracle_key).chunks(key_size).map(htb64::bytes_to_hex).collect();
+    if ciphertext_hex_blocks[known_prefix_blocks] == altered_ciphertext_hex_blocks[known_prefix_blocks]{
+      break;
+    }
+    input[i] = key_size as u8;
+  }
+  known_prefix_blocks*key_size - skipped_bytes
+
 }

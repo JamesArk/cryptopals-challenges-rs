@@ -73,9 +73,14 @@ pub fn aes_cbc_encrypt(iv: &[u8], key: &[u8], plaintext: &[u8]) -> Result<Vec<u8
 
 
 pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, ErrorStack> {
+  Ok(undo_pkcs7_padding(&aes_cbc_decrypt_no_unpadding(iv, key, ciphertext)?))
+}
+
+
+pub fn aes_cbc_decrypt_no_unpadding(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, ErrorStack> {
   let mut prev_ciphertext = iv.to_owned();
   let mut plaintext: Vec<u8> = Vec::new();
-  for chunk in ciphertext.chunks(16) {
+  for chunk in ciphertext.chunks(key.len()) {
     let output = aes_128_ecb_decrypt(key, chunk)?;
     plaintext.append(
       &mut xor_fixed_length(&output, &prev_ciphertext)
@@ -84,5 +89,5 @@ pub fn aes_cbc_decrypt(iv: &[u8], key: &[u8], ciphertext: &[u8]) -> Result<Vec<u
     );
     prev_ciphertext = chunk.to_owned();
   }
-  Ok(undo_pkcs7_padding(&plaintext))
+  Ok(plaintext)
 }

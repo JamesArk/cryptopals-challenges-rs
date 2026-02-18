@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
+use openssl::error::ErrorStack;
 use rand::Rng;
 
-use crate::{cryptog::{aes_128_ecb_decrypt, aes_128_ecb_encrypt, aes_cbc_encrypt, pkcs7_padding, undo_pkcs7_padding}};
+use crate::cryptog::{InvalidPadding, aes_128_ecb_decrypt, aes_128_ecb_encrypt, aes_cbc_decrypt_no_unpadding, aes_cbc_encrypt, pkcs7_padding, undo_pkcs7_padding, validate_undo_pkcs7_padding};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CookieValue {
@@ -35,7 +36,7 @@ pub fn encryption_oracle(plaintext: String) -> (Vec<u8>, String) {
   }
 }
 
-pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &[u8]) -> Vec<u8> {
+pub fn consistent_encryption_oracle(input_bytes: &[u8], oracle_key: &[u8]) -> Vec<u8> {
   let unknown_string_base64 = "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK";
   let unknown_string = String::from_utf8(
     BASE64_STANDARD
@@ -48,17 +49,17 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], consistent_oracle_key: &
   plaintext_bytes.append(&mut unknown_string.as_bytes().to_owned());
 
   aes_128_ecb_encrypt(
-    consistent_oracle_key,
-    &pkcs7_padding(plaintext_bytes, consistent_oracle_key.len()),
+    oracle_key,
+    &pkcs7_padding(plaintext_bytes, oracle_key.len()),
   )
   .unwrap()
 }
 
-pub fn consistent_encryption_oracle_prefixed(input_bytes: &[u8], consistent_oracle_key: &[u8]) -> Vec<u8> {
+pub fn consistent_encryption_oracle_prefixed(input_bytes: &[u8], oracle_key: &[u8]) -> Vec<u8> {
   let prefix_length = 10;
   let mut prefix:Vec<u8> = rand::random_iter().take(prefix_length).collect();
   prefix.append(&mut input_bytes.to_owned());
-  consistent_encryption_oracle(&prefix, consistent_oracle_key)
+  consistent_encryption_oracle(&prefix, oracle_key)
 }
 
 pub fn parse_cookie(input: String) -> HashMap<String, CookieValue> {
@@ -99,4 +100,23 @@ pub fn oracle_create_token(email: String, key: &[u8]) -> Vec<u8> {
 pub fn oracle_parse_token(token: &[u8], key: &[u8]) -> HashMap<String,CookieValue>{
   let token_string = undo_pkcs7_padding(&aes_128_ecb_decrypt(key, token).unwrap());
   parse_cookie(String::from_utf8(token_string).unwrap())
+}
+
+
+pub fn oracle_cbc_token(plaintext:String, oracle_iv: &[u8], oracle_key: &[u8]) -> Result<Vec<u8>,ErrorStack> {
+  let prefix = "comment1=cooking%20MCs;userdata=".to_string();
+  let postfix = ";comment2=%20like%20a%20pound%20of%20bacon".to_string();
+  let actual_plaintext = [prefix,plaintext.replace(";", "\";\"").replace("=", "\"=\""),postfix].join("");
+  aes_cbc_encrypt(oracle_iv,oracle_key,&pkcs7_padding(actual_plaintext.as_bytes().to_owned(),oracle_key.len()))
+}
+
+pub fn oracle_cbc_is_admin(encrypted_token: &[u8],oracle_iv: &[u8],oracle_key: &[u8]) -> Result<bool,InvalidPadding> {
+  let plaintext = aes_cbc_decrypt_no_unpadding(oracle_iv,oracle_key,encrypted_token).unwrap();
+  let res = validate_undo_pkcs7_padding(&plaintext);
+  if res.is_err(){
+    return Err(InvalidPadding{});
+  }
+  let actual_plaintext = String::from_utf8(res.unwrap().iter().copied().filter(|v| *v <= 127u8).collect::<Vec<u8>>()).unwrap();
+  println!("Plaintext={:?}",actual_plaintext.clone());
+  Ok(actual_plaintext.contains(";admin=true;"))
 }

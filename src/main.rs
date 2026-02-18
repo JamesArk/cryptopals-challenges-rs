@@ -6,5 +6,5 @@ mod oracle_hacker;
 mod xor;
 
 fn main() {
-  challenges::challenge_14();
+  challenges::challenge_16();
 }
