@@ -45,7 +45,7 @@ fn big_hex() {
 }
 
 #[test]
-fn cryptopals_challenge_set_01_challenge_01() {
+fn challenge_1() {
   let input = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
   let res = htb64::hex_to_base64(input.as_bytes());
   assert!(res.is_ok());

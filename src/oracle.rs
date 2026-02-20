@@ -117,6 +117,6 @@ pub fn oracle_cbc_is_admin(encrypted_token: &[u8],oracle_iv: &[u8],oracle_key: &
     return Err(InvalidPadding{});
   }
   let actual_plaintext = String::from_utf8(res.unwrap().iter().copied().filter(|v| *v <= 127u8).collect::<Vec<u8>>()).unwrap();
-  println!("Plaintext={:?}",actual_plaintext.clone());
+  println!("Plaintext:\n{:?}",actual_plaintext.clone());
   Ok(actual_plaintext.contains(";admin=true;"))
 }

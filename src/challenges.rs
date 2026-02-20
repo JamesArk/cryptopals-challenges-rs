@@ -63,6 +63,29 @@ pub fn character_frequency_score(sample: String) -> u64 {
     .sum::<u64>()
 }
 
+pub fn challenge_1() {
+  let input = "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d";
+  let res = htb64::hex_to_base64(input.as_bytes());
+  println!("Challenge: hex to Base64");
+  println!("Input: {:?}", input);
+  println!("Expected: \"SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t\"");
+  println!("Actual: {:?}", res.unwrap());
+}
+
+pub fn challenge_2() {
+  let input1 = "1c0111001f010100061a024b53535009181c";
+  let input2 = "686974207468652062756c6c277320657965";
+  let res = xor::xor_fixed_length(
+    &htb64::hex_bytes_to_bytes(&input1.as_bytes()).unwrap(),
+    &htb64::hex_bytes_to_bytes(&input2.as_bytes()).unwrap(),
+  );
+  println!("Challenge: fixed/same size xor");
+  println!("Input1: {:?}", input1);
+  println!("Input2: {:?}", input2);
+  println!("Expected: \"746865206b696420646f6e277420706c6179\"");
+  println!("Actual: {:?}", htb64::bytes_to_hex(&res.unwrap()));
+}
+
 #[allow(dead_code)]
 pub fn challenge_3() {
   let input = "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736".to_owned();
@@ -82,8 +105,12 @@ pub fn challenge_3() {
   let mut res = Vec::from_iter(table);
   res.sort_by(|&(_, v1), &(_, v2)| v1.cmp(&v2).reverse());
 
+  println!("Challenge: Crack Single-byte XOR cipher");
+  println!("Input: {:?}", input);
+  println!("Attempts:");
   for (k, v) in res {
-    println!("Character: '{}' | Score:{:.5}", String::from_utf8(vec![k]).unwrap(), v);
+    println!("{}", "-".repeat(16));
+    println!("Character: {:?} | Score:{:.5}", String::from_utf8(vec![k]).unwrap(), v);
     println!("Attempt: {:?}", String::from_utf8(xor::xor_single_byte(&cipher, k)).unwrap())
   }
 }
@@ -119,10 +146,14 @@ pub fn challenge_4() {
       candidates_table.insert((idx, line), valid_attempts);
     }
   }
+  println!("Challenge: Detect single-character XOR");
+  println!("Input: {:?}", input_file);
+  println!("Line Candidates:");
   for ((idx, k), v) in candidates_table {
     if v[0].1 < 90 {
       continue;
     }
+    println!("{}", "-".repeat(16));
     println!(
       "Line Number: {}\nLine hex: '{}'\nTop Score: {:.5}\nTop Plaintext Attempt: {:?}",
       idx, k, v[0].1, v[0].2
@@ -137,8 +168,21 @@ pub fn challenge_4() {
         p
       );
     }
-    println!("]\n------------------------------------");
+    println!("]");
   }
+}
+
+pub fn challenge_5() {
+  let input = "\
+Burning 'em, if you ain't quick and nimble
+I go crazy when I hear a cymbal";
+  let res = htb64::bytes_to_hex(&xor::xor_repeating_key("ICE".as_bytes(), input.as_bytes()));
+  println!("Challenge: Implement repeating-key XOR");
+  println!("Input: {:?}", input);
+  println!(
+    "Expected:\n\"0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f\""
+  );
+  println!("Actual:\n{:?}",res.to_ascii_lowercase());
 }
 
 #[allow(dead_code)]
@@ -217,10 +261,15 @@ pub fn challenge_6() {
       best_solution = (score, key_size, (key, plaintext));
     }
   }
-  println!(
-    "Key size:{:?}\nKey: {:?}\nPlaintext:\n{}\n---------------------------",
-    best_solution.1, best_solution.2.0, best_solution.2.1
-  );
+  println!("Challenge: Break repeating-key XOR");
+  println!("Input: {:?}",input_file);
+  println!("Guess Key size: {:?}",best_solution.1);
+  println!("Guess Key: {:?}",best_solution.2.0);
+  println!("Actual Key size: 29");
+  println!("Actual Key: \"Terminator X: Bring the noise\"");
+  println!("Plaintext:\n{}","-".repeat(16));
+  print!("{}",best_solution.2.1);
+  println!("{}","-".repeat(16));
 }
 #[allow(dead_code)]
 pub fn challenge_7() {
@@ -241,8 +290,10 @@ pub fn challenge_7() {
 
   let plaintext = cryptog::aes_128_ecb_decrypt("YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes)
     .expect("Failed to decrypt input file from challenge 7");
+  println!("Challenge: AES in ECB mode");
+  println!("Input: {:?}",input_file);
   println!(
-    "Plaintext:\n{}\n-------------------------------------",
+    "Plaintext:\n{}",
     String::from_utf8(plaintext).unwrap()
   );
 }
@@ -271,14 +322,27 @@ pub fn challenge_8() {
     if chunks.len() == size {
       continue;
     }
-    best_guess_idx = idx;
+    best_guess_idx = idx+1;
     best_guess_len = chunks.len();
   }
 
+  println!("Challenge: Detect AES in ECB mode");
+  println!("Input: {:?}",input_file);
   println!(
     "Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",
     best_guess_idx, best_guess_len,
   );
+  println!("Actual line: 133");
+  println!("Actual unique sequence size: {} chunks of 16 bytes",7);
+}
+
+pub fn challenge_9() {
+  let input = "YELLOW SUBMARINE";
+  let res = cryptog::pkcs7_padding(input.as_bytes().to_owned(), 20);
+  println!("Challenge: Implement PKCS#7 padding");
+  println!("Input: {:?}", input);
+  println!("Expected: {:?}",input.to_owned()+&String::from_utf8(vec![4;4]).unwrap());
+  println!("Expected: {:?}",String::from_utf8(res).unwrap());
 }
 
 #[allow(dead_code)]
@@ -297,8 +361,15 @@ pub fn challenge_10() {
   let ciphertext_bytes = BASE64_STANDARD
     .decode(base64_ciphertext)
     .expect("Failed to decode Base64 string from input file for challenge 10");
+  let key = "YELLOW SUBMARINE";
+  let iv = vec![0; 16];
   let plaintext_bytes =
-    cryptog::aes_cbc_decrypt(&[0; 16], "YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes).unwrap();
+    cryptog::aes_cbc_decrypt(&iv,key.as_bytes(), &ciphertext_bytes).unwrap();
+  println!("Challenge: Implement CBC mode");
+  println!("Input: {:?}",input_file);
+  println!("Key: {:?}",key);
+  println!("IV: {:?}",String::from_utf8(iv).unwrap());
+  println!("Plaintext:");
   println!("{}", String::from_utf8(plaintext_bytes).unwrap());
 }
 
@@ -309,24 +380,18 @@ pub fn challenge_11() {
   let is_ecb = detect_ecb("SEVENTYSEVER".len(), &ciphertext);
 
   let guess = if is_ecb { "ECB".to_owned() } else { "CBC".to_owned() };
-  println!("Guess: {}\nMode: {}", guess, mode);
-  if guess != mode {
-    panic!();
-  }
+  println!("Challenge: ECB/CBC detection oracle");
+  println!("Expected: {:?}",mode);
+  println!("Guess: {:?}",guess);
 }
 
 #[allow(dead_code)]
 pub fn challenge_12() {
   let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
+  let oracle_fn = |pt: &[u8]| oracle::consistent_encryption_oracle(pt, &oracle_key);
+  let key_size_guess = oracle_hacker::guess_key_size(oracle_fn);
 
-  let key_size_guess =
-    oracle_hacker::guess_key_size(&oracle_key, oracle::consistent_encryption_oracle);
-
-  let unknown_string_size = oracle_hacker::guess_target_size(
-    key_size_guess,
-    &oracle_key,
-    oracle::consistent_encryption_oracle,
-  );
+  let unknown_string_size = oracle_hacker::guess_target_size(key_size_guess, oracle_fn);
   let input = "SEVENTYSEVEN".to_owned().repeat(20);
   let ciphertext = oracle::consistent_encryption_oracle(input.as_bytes(), &oracle_key);
   if !detect_ecb(key_size_guess, &ciphertext) {
@@ -335,22 +400,20 @@ pub fn challenge_12() {
 
   let guess = oracle_hacker::guess_unknown_string(
     key_size_guess,
-    oracle_hacker::guess_prefix_size(
-      key_size_guess,
-      &oracle_key,
-      oracle::consistent_encryption_oracle,
-    ),
+    oracle_hacker::guess_prefix_size(key_size_guess, oracle_fn),
     unknown_string_size,
     &oracle_key,
     oracle::consistent_encryption_oracle,
   );
 
+  println!("Challenge: Byte-at-a-time ECB decryption (Simple)");
+  println!("Actual Key size: 16 bytes");
   println!("Key size guess: {} bytes", key_size_guess);
+  println!("Actual Unknown String size: 138 bytes");
   println!("Unknown string guess size: {} bytes", unknown_string_size);
-  println!("Unknown String guess:");
-  println!("{}", "-".repeat(20));
+  println!("Plaintext guess:");
+  println!("{}","-".repeat(20));
   print!("{}", guess);
-  println!("{}", "-".repeat(20));
 }
 
 #[allow(dead_code)]
@@ -365,21 +428,18 @@ pub fn challenge_13() {
   let size = ciphertext.len();
   ciphertext.copy_within(key.len()..key.len() * 2, size - (key.len()));
   let res = oracle_parse_token(&ciphertext, &key);
+  println!("Challenge: ECB cut-and-paste");
+  println!("Resulting token fields:");
   println!("{:#?}", res);
 }
 
 #[allow(dead_code)]
 pub fn challenge_14() {
   let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
+  let oracle_fn = |pt: &[u8]| oracle::consistent_encryption_oracle_prefixed(pt, &oracle_key);
+  let key_size_guess = oracle_hacker::guess_key_size(oracle_fn);
 
-  let key_size_guess =
-    oracle_hacker::guess_key_size(&oracle_key, oracle::consistent_encryption_oracle_prefixed);
-
-  let unknown_string_size = oracle_hacker::guess_target_size(
-    key_size_guess,
-    &oracle_key,
-    oracle::consistent_encryption_oracle_prefixed,
-  );
+  let unknown_string_size = oracle_hacker::guess_target_size(key_size_guess, oracle_fn);
   let input = "SEVENTYSEVEN".to_owned().repeat(20);
   let ciphertext = oracle::consistent_encryption_oracle_prefixed(input.as_bytes(), &oracle_key);
   if !detect_ecb(key_size_guess, &ciphertext) {
@@ -388,41 +448,70 @@ pub fn challenge_14() {
 
   let guess = oracle_hacker::guess_unknown_string(
     key_size_guess,
-    oracle_hacker::guess_prefix_size(
-      key_size_guess,
-      &oracle_key,
-      oracle::consistent_encryption_oracle_prefixed,
-    ),
+    oracle_hacker::guess_prefix_size(key_size_guess, oracle_fn),
     unknown_string_size,
     &oracle_key,
     oracle::consistent_encryption_oracle_prefixed,
   );
 
+  println!("Challenge: Byte-at-a-time ECB decryption (Harder)");
+  println!("Actual Key size: 16 bytes");
   println!("Key size guess: {} bytes", key_size_guess);
+  println!("Actual Unknown String size: 138 bytes");
   println!("Unknown string guess size: {} bytes", unknown_string_size);
-  println!("Unknown String guess:");
-  println!("{}", "-".repeat(20));
+  println!("Plaintext guess:");
+  println!("{}","-".repeat(20));
   print!("{}", guess);
-  println!("{}", "-".repeat(20));
+}
+
+pub fn challenge_15() {
+  let input_correct = "ICE ICE BABY\x04\x04\x04\x04";
+  let input_incorrect_1 = "ICE ICE BABY\x05\x05\x05\x05";
+  let input_incorrect_2 = "ICE ICE BABY\x01\x02\x03\x04";
+  let correct_guess = cryptog::validate_undo_pkcs7_padding(input_correct.as_bytes());
+  let incorrect_guess_1 = cryptog::validate_undo_pkcs7_padding(input_incorrect_1.as_bytes());
+  let incorrect_guess_2 = cryptog::validate_undo_pkcs7_padding(input_incorrect_1.as_bytes());
+
+  println!("Challenge: PKCS#7 padding validation");
+  println!("Input correct: {:?}",input_correct);
+  println!("Input incorrect 1: {:?}",input_incorrect_1);
+  println!("Input incorrect 2: {:?}",input_incorrect_2);
+  println!("Actual validation:");
+  println!("Input correct result: {:?}",correct_guess);
+  println!("Input correct unpadded: {:?}", String::from_utf8(correct_guess.unwrap()).unwrap());
+  println!("Input incorrect 1 result: {:?}",incorrect_guess_1);
+  println!("Input incorrect 2 result: {:?}",incorrect_guess_2)
 }
 
 #[allow(dead_code)]
-pub fn challenge_16(){
-  let oracle_key:Vec<u8> = rand::random_iter().take(16).collect();
-  let oracle_iv:Vec<u8> = rand::random_iter().take(16).collect();
+pub fn challenge_16() {
+  let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
+  let oracle_iv: Vec<u8> = rand::random_iter().take(16).collect();
 
-  let oracle_fn = |plaintext:&[u8],key:&[u8]| -> Vec<u8> {oracle::oracle_cbc_token(String::from_utf8(plaintext.to_owned()).unwrap(), &oracle_iv, &key).unwrap()};
-  let key_size = oracle_hacker::guess_key_size(&oracle_key, oracle_fn);
-  let prefix_size = oracle_hacker::guess_prefix_size_cbc(key_size, &oracle_key, oracle_fn);
+  let oracle_fn = |plaintext: &[u8]| -> Vec<u8> {
+    oracle::oracle_cbc_token(
+      String::from_utf8(plaintext.to_owned()).unwrap(),
+      &oracle_iv,
+      &oracle_key,
+    )
+    .unwrap()
+  };
+  let key_size = oracle_hacker::guess_key_size(oracle_fn);
+  let prefix_size = oracle_hacker::guess_prefix_size_cbc(key_size, oracle_fn);
 
-  let attacker_plaintext = "A".repeat(key_size)+":admin<true";
-  let mut encrypted_token = oracle::oracle_cbc_token(attacker_plaintext, &oracle_iv, &oracle_key).unwrap();
+  let attacker_plaintext = "A".repeat(key_size) + ":admin<true";
+  let mut encrypted_token =
+    oracle::oracle_cbc_token(attacker_plaintext, &oracle_iv, &oracle_key).unwrap();
 
   let diff = prefix_size % key_size;
-  let prefix_block = if prefix_size == 0 { 0 } else {prefix_size.div_ceil(key_size)-1};
+  let prefix_block = if prefix_size == 0 { 0 } else { prefix_size.div_ceil(key_size) - 1 };
 
-  encrypted_token[(prefix_block+1) * key_size + diff] ^= 0b0000_00001;
-  encrypted_token[(prefix_block+1) * key_size + diff + 6] ^= 0b0000_00001;
+  encrypted_token[(prefix_block + 1) * key_size + diff] ^= 0b0000_00001;
+  encrypted_token[(prefix_block + 1) * key_size + diff + 6] ^= 0b0000_00001;
 
-  println!("Admin priviliges: {}",oracle::oracle_cbc_is_admin(&encrypted_token, &oracle_iv, &oracle_key).unwrap());
+  println!("Challenge: CBC bitflipping attacks");
+  println!(
+    "Admin priviliges: {}",
+    oracle::oracle_cbc_is_admin(&encrypted_token, &oracle_iv, &oracle_key).unwrap()
+  );
 }
