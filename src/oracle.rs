@@ -2,9 +2,14 @@ use std::collections::HashMap;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
 use openssl::error::ErrorStack;
-use rand::Rng;
+use rand::{Rng, seq::IndexedRandom};
 
-use crate::cryptog::{InvalidPadding, aes_128_ecb_decrypt, aes_128_ecb_encrypt, aes_cbc_decrypt_no_unpadding, aes_cbc_encrypt, pkcs7_padding, undo_pkcs7_padding, validate_undo_pkcs7_padding};
+use crate::{
+  cryptog::{
+    InvalidPadding, aes_128_ecb_decrypt, aes_128_ecb_encrypt, aes_cbc_decrypt_no_unpadding,
+    aes_cbc_encrypt, pkcs7_padding, undo_pkcs7_padding, validate_undo_pkcs7_padding,
+  }
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CookieValue {
@@ -48,16 +53,12 @@ pub fn consistent_encryption_oracle(input_bytes: &[u8], oracle_key: &[u8]) -> Ve
   plaintext_bytes.append(&mut input_bytes.to_owned());
   plaintext_bytes.append(&mut unknown_string.as_bytes().to_owned());
 
-  aes_128_ecb_encrypt(
-    oracle_key,
-    &pkcs7_padding(plaintext_bytes, oracle_key.len()),
-  )
-  .unwrap()
+  aes_128_ecb_encrypt(oracle_key, &pkcs7_padding(plaintext_bytes, oracle_key.len())).unwrap()
 }
 
 pub fn consistent_encryption_oracle_prefixed(input_bytes: &[u8], oracle_key: &[u8]) -> Vec<u8> {
   let prefix_length = 10;
-  let mut prefix:Vec<u8> = rand::random_iter().take(prefix_length).collect();
+  let mut prefix: Vec<u8> = rand::random_iter().take(prefix_length).collect();
   prefix.append(&mut input_bytes.to_owned());
   consistent_encryption_oracle(&prefix, oracle_key)
 }
@@ -94,29 +95,67 @@ pub fn profile_for(email: String) -> String {
 pub fn oracle_create_token(email: String, key: &[u8]) -> Vec<u8> {
   let token = profile_for(email);
   aes_128_ecb_encrypt(key, &pkcs7_padding(token.as_bytes().to_owned(), key.len())).unwrap()
-
 }
 
-pub fn oracle_parse_token(token: &[u8], key: &[u8]) -> HashMap<String,CookieValue>{
+pub fn oracle_parse_token(token: &[u8], key: &[u8]) -> HashMap<String, CookieValue> {
   let token_string = undo_pkcs7_padding(&aes_128_ecb_decrypt(key, token).unwrap());
   parse_cookie(String::from_utf8(token_string).unwrap())
 }
 
-
-pub fn oracle_cbc_token(plaintext:String, oracle_iv: &[u8], oracle_key: &[u8]) -> Result<Vec<u8>,ErrorStack> {
+pub fn oracle_cbc_token(
+  plaintext: String,
+  oracle_iv: &[u8],
+  oracle_key: &[u8],
+) -> Result<Vec<u8>, ErrorStack> {
   let prefix = "comment1=cooking%20MCs;userdata=".to_string();
   let postfix = ";comment2=%20like%20a%20pound%20of%20bacon".to_string();
-  let actual_plaintext = [prefix,plaintext.replace(";", "\";\"").replace("=", "\"=\""),postfix].join("");
-  aes_cbc_encrypt(oracle_iv,oracle_key,&pkcs7_padding(actual_plaintext.as_bytes().to_owned(),oracle_key.len()))
+  let actual_plaintext =
+    [prefix, plaintext.replace(";", "\";\"").replace("=", "\"=\""), postfix].join("");
+  aes_cbc_encrypt(
+    oracle_iv,
+    oracle_key,
+    &pkcs7_padding(actual_plaintext.as_bytes().to_owned(), oracle_key.len()),
+  )
 }
 
-pub fn oracle_cbc_is_admin(encrypted_token: &[u8],oracle_iv: &[u8],oracle_key: &[u8]) -> Result<bool,InvalidPadding> {
-  let plaintext = aes_cbc_decrypt_no_unpadding(oracle_iv,oracle_key,encrypted_token).unwrap();
+pub fn oracle_cbc_is_admin(
+  encrypted_token: &[u8],
+  oracle_iv: &[u8],
+  oracle_key: &[u8],
+) -> Result<bool, InvalidPadding> {
+  let plaintext = aes_cbc_decrypt_no_unpadding(oracle_iv, oracle_key, encrypted_token).unwrap();
   let res = validate_undo_pkcs7_padding(&plaintext);
-  if res.is_err(){
-    return Err(InvalidPadding{});
+  if res.is_err() {
+    return Err(InvalidPadding {});
   }
-  let actual_plaintext = String::from_utf8(res.unwrap().iter().copied().filter(|v| *v <= 127u8).collect::<Vec<u8>>()).unwrap();
-  println!("Plaintext:\n{:?}",actual_plaintext.clone());
+  let actual_plaintext =
+    String::from_utf8(res.unwrap().iter().copied().filter(|v| *v <= 127u8).collect::<Vec<u8>>())
+      .unwrap();
+  println!("Plaintext:\n{:?}", actual_plaintext.clone());
   Ok(actual_plaintext.contains(";admin=true;"))
+}
+
+pub fn oracle_cbc_padding(oracle_key: &[u8]) -> (Vec<u8>, Vec<u8>) {
+  let choices = &vec![
+    "MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=",
+    "MDAwMDAxV2l0aCB0aGUgYmFzcyBraWNrZWQgaW4gYW5kIHRoZSBWZWdhJ3MgYXJlIHB1bXBpbic=",
+    "MDAwMDAyUXVpY2sgdG8gdGhlIHBvaW50LCB0byB0aGUgcG9pbnQsIG5vIGZha2luZw==",
+    "MDAwMDAzQ29va2luZyBNQydzIGxpa2UgYSBwb3VuZCBvZiBiYWNvbg==",
+    "MDAwMDA0QnVybmluZyAnZW0sIGlmIHlvdSBhaW4ndCBxdWljayBhbmQgbmltYmxl",
+    "MDAwMDA1SSBnbyBjcmF6eSB3aGVuIEkgaGVhciBhIGN5bWJhbA==",
+    "MDAwMDA2QW5kIGEgaGlnaCBoYXQgd2l0aCBhIHNvdXBlZCB1cCB0ZW1wbw==",
+    "MDAwMDA3SSdtIG9uIGEgcm9sbCwgaXQncyB0aW1lIHRvIGdvIHNvbG8=",
+    "MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
+    "MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93",
+  ];
+  let choice = choices.choose(&mut rand::rng()).unwrap();
+  let iv: Vec<u8> = rand::rng().random_iter().take(oracle_key.len()).collect();
+  let ciphertext = aes_cbc_encrypt(&iv, oracle_key, choice.as_bytes()).unwrap();
+  (ciphertext, iv)
+}
+
+pub fn oracle_cbc_padding_validator(token: &[u8], iv: &[u8], oracle_key: &[u8]) -> bool {
+  let plaintext = aes_cbc_decrypt_no_unpadding(iv, oracle_key, token).unwrap();
+  let plaintext = validate_undo_pkcs7_padding(&plaintext);
+  return plaintext.is_ok();
 }

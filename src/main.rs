@@ -25,15 +25,19 @@ fn main() {
     challenges::challenge_14,
     challenges::challenge_15,
     challenges::challenge_16,
+    challenges::challenge_17,
   ];
 
   let args:Vec<String> = env::args().collect();
-  let challenge = if args.len() == 1 {
+  let challenge = if args.len() == 1 || args.len() > 2 {
     16
   } else if args[1].chars().all(|v| v.is_digit(10)) {
     args[1].parse::<i32>().unwrap()
-  } else {
+  } else if args[1].to_ascii_lowercase() == "all" {
       -1
+  } else {
+    println!("Please specify 'all' or a number for the challenge");
+    return;
   };
   if challenge == -1 {
     for (idx,f) in challenges_vec.iter().enumerate() {

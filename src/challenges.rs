@@ -515,3 +515,21 @@ pub fn challenge_16() {
     oracle::oracle_cbc_is_admin(&encrypted_token, &oracle_iv, &oracle_key).unwrap()
   );
 }
+
+pub fn challenge_17(){
+  let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
+  let (ciphertext,iv) = oracle::oracle_cbc_padding(&oracle_key);
+  let chunks = ciphertext.len() / oracle_key.len();
+  let bruteforce_block = vec![0;oracle_key.len()];
+  let target_block = ciphertext.chunks(oracle_key.len()).last().unwrap().to_owned();
+  let prev_block = ciphertext.chunks(oracle_key.len()).nth(chunks-2).unwrap().to_owned();
+  for i in 0..255{
+    let mut oracle_input = bruteforce_block.clone();
+    oracle_input.append(&mut target_block.clone());
+    oracle_input[oracle_key.len()-1] = i;
+    if oracle::oracle_cbc_padding_validator(&oracle_input, &iv, &oracle_key){
+      println!("Last byte is {:?}",prev_block[prev_block.len()-1]^oracle_input[oracle_key.len()-1]^0x01);
+      return;
+    }
+  }
+}
