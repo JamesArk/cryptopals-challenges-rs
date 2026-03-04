@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::htb64;
+use crate::{cryptog, htb64};
 
 pub fn detect_ecb(key_size: usize, ciphertext: &[u8]) -> bool {
   let ciphertext_hex = htb64::bytes_to_hex(ciphertext);
@@ -27,10 +27,7 @@ pub fn guess_key_size(oracle_fn: impl Fn(&[u8]) -> Vec<u8>) -> usize {
   last_size
 }
 
-pub fn guess_prefix_size(
-  key_size: usize,
-  oracle_fn: impl Fn(&[u8]) -> Vec<u8>,
-) -> usize {
+pub fn guess_prefix_size(key_size: usize, oracle_fn: impl Fn(&[u8]) -> Vec<u8>) -> usize {
   let mut input: Vec<u8> = vec![key_size as u8];
   let starting_size = oracle_fn(&input).len();
   for _ in 1..=key_size {
@@ -61,13 +58,8 @@ pub fn guess_prefix_size(
   if first_block_idx > 0 { first_block_idx * key_size - (input.len() % key_size) } else { 0 }
 }
 
-pub fn guess_target_size(
-  key_size: usize,
-  oracle_fn: impl Fn(&[u8]) -> Vec<u8>,
-) -> usize {
-  let prefix_length = guess_prefix_size(key_size, |u| -> Vec<u8> {
-    oracle_fn(u)
-});
+pub fn guess_target_size(key_size: usize, oracle_fn: impl Fn(&[u8]) -> Vec<u8>) -> usize {
+  let prefix_length = guess_prefix_size(key_size, |u| -> Vec<u8> { oracle_fn(u) });
   let last_size = oracle_fn("A".as_bytes()).len();
   for i in 2..key_size {
     let total_size = oracle_fn("A".repeat(i).as_bytes()).len();
@@ -133,11 +125,7 @@ pub fn guess_unknown_string(
   String::from_utf8(solution).unwrap()
 }
 
-
-pub fn guess_prefix_size_cbc(
-  key_size: usize,
-  oracle_fn: impl Fn(&[u8]) -> Vec<u8>,
-) -> usize {
+pub fn guess_prefix_size_cbc(key_size: usize, oracle_fn: impl Fn(&[u8]) -> Vec<u8>) -> usize {
   let mut input: Vec<u8> = vec![key_size as u8];
   let starting_size = oracle_fn(&input).len();
   for _ in 1..=key_size {
@@ -147,30 +135,117 @@ pub fn guess_prefix_size_cbc(
       break;
     }
   }
-  let ciphertext_hex_blocks: Vec<String> = oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
+  let ciphertext_hex_blocks: Vec<String> =
+    oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
   input[0] = 0;
-  let altered_ciphertext_hex_blocks: Vec<String> = oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
+  let altered_ciphertext_hex_blocks: Vec<String> =
+    oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
 
   let mut known_prefix_blocks = 0;
   for i in 0..ciphertext_hex_blocks.len() {
     if ciphertext_hex_blocks[i] != altered_ciphertext_hex_blocks[i] {
       break;
     }
-    known_prefix_blocks+=1;
+    known_prefix_blocks += 1;
   }
   input[0] = key_size as u8;
-  input.append(&mut vec![key_size as u8;key_size]);
-  let ciphertext_hex_blocks: Vec<String> = oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
+  input.append(&mut vec![key_size as u8; key_size]);
+  let ciphertext_hex_blocks: Vec<String> =
+    oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
 
   let skipped_bytes = 0;
   for i in 0..input.len() {
     input[i] = 0;
-    let altered_ciphertext_hex_blocks: Vec<String> = oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
-    if ciphertext_hex_blocks[known_prefix_blocks] == altered_ciphertext_hex_blocks[known_prefix_blocks]{
+    let altered_ciphertext_hex_blocks: Vec<String> =
+      oracle_fn(&input).chunks(key_size).map(htb64::bytes_to_hex).collect();
+    if ciphertext_hex_blocks[known_prefix_blocks]
+      == altered_ciphertext_hex_blocks[known_prefix_blocks]
+    {
       break;
     }
     input[i] = key_size as u8;
   }
-  known_prefix_blocks*key_size - skipped_bytes
+  known_prefix_blocks * key_size - skipped_bytes
+}
 
+pub fn cbc_padding_attack(
+  iv: &[u8],
+  ciphertext: &[u8],
+  oracle_fn: impl Fn(&[u8]) -> bool,
+) -> String {
+  let mut blocks = iv.to_owned();
+  blocks.append(&mut ciphertext.to_owned());
+  let mut blocks = blocks.chunks(iv.len()).collect::<Vec<&[u8]>>().into_iter().rev();
+  let mut current = blocks.next();
+  let mut previous = blocks.next();
+  let mut decrypted: Vec<Vec<u8>> = vec![];
+  while !previous.is_none() {
+    let target_block = current.unwrap();
+    let prev_block = previous.unwrap();
+    // each block gets "decrypted" the same way
+    decrypted.push(cbc_padding_attack_block(target_block, prev_block, &oracle_fn));
+    current = previous;
+    previous = blocks.next();
+  }
+  // reverse because we pushed blocks from last to first
+  decrypted.reverse();
+  let plaintext = cryptog::undo_pkcs7_padding(&decrypted.iter().flatten().copied().collect::<Vec<u8>>());
+  String::from_utf8(plaintext).unwrap()
+}
+
+fn cbc_padding_attack_block(
+  target_block: &[u8],
+  prev_block: &[u8],
+  oracle_fn: impl Fn(&[u8]) -> bool
+) -> Vec<u8> {
+  // decrypted plaintext
+  let mut decrypted = vec![0; target_block.len()];
+  // block which we will flip bits until we find the right valid padding
+  let mut bruteforce_block: Vec<u8> = vec![0; target_block.len()];
+
+  let mut padding = 0x00;
+  for byte_idx in (0..(target_block.len())).rev() {
+    padding += 1;
+    let mut oracle_input = bruteforce_block.clone();
+    oracle_input.append(&mut target_block.to_owned());
+    for byte_value in 0..=255 {
+      oracle_input[byte_idx] = byte_value;
+      if oracle_fn(&oracle_input) {
+        // found a valid padding
+        // verify that we really found the right padding that we are looking for
+        let mut check_padding_flip = oracle_input.clone();
+        check_padding_flip[byte_idx + 1] ^= 0x02; // can flip any bit
+        let valid_if_padding_flip = oracle_fn(&check_padding_flip);
+
+        let mut check_plaintext_flip = oracle_input.clone();
+        check_plaintext_flip[if byte_idx==0 {0} else { byte_idx - 1 }] ^= 0x02; // can flip any bit
+        let valid_if_plaintext_flip = oracle_fn(&check_plaintext_flip);
+
+        if padding == 1 {
+          if !valid_if_plaintext_flip {
+            continue;
+          }
+        } else if padding == 16 {
+          if valid_if_padding_flip {
+            continue;
+          }
+        }else {
+          if !valid_if_plaintext_flip || valid_if_padding_flip {
+            continue;
+          }
+        }
+
+
+        // true plaintext byte value found
+        let plaintext_byte = padding ^ prev_block[byte_idx] ^ byte_value;
+        decrypted[byte_idx] = plaintext_byte;
+        // prepare next oracle input for the next target padding
+        for idx in ((target_block.len() - (padding) as usize)..target_block.len()).rev() {
+          bruteforce_block[idx] = (padding + 1) ^ prev_block[idx] ^ decrypted[idx];
+        }
+        break;
+      }
+    }
+  }
+  decrypted
 }

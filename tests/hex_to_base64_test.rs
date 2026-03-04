@@ -34,13 +34,13 @@ fn big_hex() {
     .map(|c| c.clone())
     .collect::<Vec<_>>()
     .concat();
-  println!("Input {}", input);
+  dbg!(input.clone());
   let res = htb64::hex_to_base64(input.as_bytes());
   let real_res = BASE64_STANDARD.encode(hex::decode(input).unwrap());
-  println!("Expected {}", real_res);
+  dbg!(real_res.clone());
   assert!(!res.is_err());
   let res_string = res.unwrap();
-  println!("Actual {}", res_string);
+  dbg!(res_string.clone());
   assert!(res_string == real_res)
 }
 

@@ -148,9 +148,9 @@ pub fn oracle_cbc_padding(oracle_key: &[u8]) -> (Vec<u8>, Vec<u8>) {
     "MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
     "MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93",
   ];
-  let choice = choices.choose(&mut rand::rng()).unwrap();
+  let choice = BASE64_STANDARD.decode(choices.choose(&mut rand::rng()).unwrap()).unwrap();
   let iv: Vec<u8> = rand::rng().random_iter().take(oracle_key.len()).collect();
-  let ciphertext = aes_cbc_encrypt(&iv, oracle_key, choice.as_bytes()).unwrap();
+  let ciphertext = aes_cbc_encrypt(&iv, oracle_key, &choice).unwrap();
   (ciphertext, iv)
 }
 

@@ -52,9 +52,8 @@ pub fn validate_undo_pkcs7_padding(plaintext: &[u8]) -> Result<Vec<u8>,InvalidPa
   if padding_guess == 0 || padding_guess > 16{
     return Err(InvalidPadding{});
   }
-  let padding:Vec<&u8> = plaintext.iter().skip(size-padding_guess as usize).take(padding_guess as usize).collect();
+  let padding:Vec<&u8> = plaintext.iter().rev().take(padding_guess as usize).collect();
   if padding.len() == padding_guess as usize && padding.iter().all(|v| **v == padding_guess) {
-    dbg!(padding_guess);
     Ok(plaintext.iter().take(size - padding_guess as usize).copied().collect())
   } else {
     Err(InvalidPadding{})

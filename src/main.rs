@@ -30,7 +30,7 @@ fn main() {
 
   let args:Vec<String> = env::args().collect();
   let challenge = if args.len() == 1 || args.len() > 2 {
-    16
+    challenges_vec.len() as i32
   } else if args[1].chars().all(|v| v.is_digit(10)) {
     args[1].parse::<i32>().unwrap()
   } else if args[1].to_ascii_lowercase() == "all" {
