@@ -1,3 +1,6 @@
+use std::iter;
+
+use byteorder::{ByteOrder, LittleEndian};
 use openssl::{
   error::ErrorStack, symm::{Cipher, Crypter}
 };
@@ -93,4 +96,30 @@ pub fn aes_cbc_decrypt_no_unpadding(iv: &[u8], key: &[u8], ciphertext: &[u8]) ->
     prev_ciphertext = chunk.to_owned();
   }
   Ok(plaintext)
+}
+
+
+pub fn aes_ctr(nonce: u64, key: &[u8], input: &[u8])  -> Vec<u8> {
+  let mut nonce_count = vec![0;8];
+  LittleEndian::write_u64(&mut nonce_count, nonce);
+  let mut count_vec = vec![0;8];
+  LittleEndian::write_u64(&mut count_vec, 0);
+  nonce_count.append(&mut count_vec);
+  let cipher = Cipher::aes_128_ecb();
+  let mut crypter = Crypter::new(cipher, openssl::symm::Mode::Encrypt, key, None).unwrap();
+  crypter.pad(false);
+  let mut key_stream = iter::from_fn(move || {
+    let mut next = vec![0;key.len()*2];
+    let m = crypter.update(&nonce_count, &mut next).unwrap();
+    let n = crypter.finalize(&mut next).unwrap();
+    let next = next[0..m + n ].to_owned();
+
+    let mut count_vec = nonce_count.split_off(8);
+    let count = LittleEndian::read_u64(&count_vec) + 1;
+    LittleEndian::write_u64(&mut count_vec, count);
+    nonce_count.append(&mut count_vec);
+    Some(next)
+  });
+
+  input.chunks(key.len()).map(|v| xor::xor_repeating_key(&key_stream.next().unwrap(), v)).flatten().collect()
 }

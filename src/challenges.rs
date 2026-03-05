@@ -523,3 +523,13 @@ pub fn challenge_17(){
   println!("Challenge: The CBC padding oracle");
   println!("Plaintext: {:?}",plaintext);
 }
+
+pub fn challenge_18(){
+  let input = "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==";
+  let input_bytes = BASE64_STANDARD.decode(input).expect("Failed to decode base64 challenge 18 input");
+  let key = "YELLOW SUBMARINE".as_bytes().to_owned();
+  let nonce = 0;
+
+  let res = cryptog::aes_ctr(nonce, &key, &input_bytes);
+  println!("{:?}",String::from_utf8(res));
+}

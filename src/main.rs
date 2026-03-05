@@ -26,6 +26,7 @@ fn main() {
     challenges::challenge_15,
     challenges::challenge_16,
     challenges::challenge_17,
+    challenges::challenge_18,
   ];
 
   let args:Vec<String> = env::args().collect();
