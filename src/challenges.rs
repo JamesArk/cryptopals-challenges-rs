@@ -1,13 +1,17 @@
+use std::char;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::slice;
+use std::string::FromUtf8Error;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use cryptopals_challeges_rs::distance::hamming_distance;
+use itertools::Itertools;
 
 use crate::cryptog;
 use crate::oracle;
@@ -19,7 +23,7 @@ use crate::xor;
 
 use crate::htb64;
 
-pub fn character_frequency_score(sample: String) -> u64 {
+fn character_frequency_score(sample: String) -> u64 {
   let freq_table: BTreeMap<u8, u64> = BTreeMap::from([
     (b'E', 1270),
     (b'T', 910),
@@ -58,9 +62,63 @@ pub fn character_frequency_score(sample: String) -> u64 {
     .iter()
     .map(|(k, score)| {
       let count = sample_freq_table.get(k).unwrap_or(&0);
-      score * count / size as u64
+      score * count
     })
     .sum::<u64>()
+    * 10000
+    / (1270 * size as u64)
+}
+
+fn trigram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
+  let size = sample.len();
+  sample
+    .to_ascii_uppercase()
+    .chars()
+    .tuple_windows::<(char, char, char)>()
+    .map(|v| vec![v.0, v.1, v.2].iter().collect::<String>())
+    .map(|v| freq_table.get(&v).unwrap_or(&0u64))
+    .sum::<u64>()
+    * 10000
+    / (77534223 * size as u64)
+}
+
+fn digram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
+  let size = sample.len();
+  sample
+    .to_ascii_uppercase()
+    .chars()
+    .tuple_windows::<(char, char)>()
+    .map(|v| vec![v.0, v.1].iter().collect::<String>())
+    .map(|v| freq_table.get(&v).unwrap_or(&0u64))
+    .sum::<u64>()
+    * 10000
+    / (116997844 * size as u64)
+}
+
+fn trigram_frequency_table() -> HashMap<String, u64> {
+  let english_trigrams_file = "./res/english_trigrams.txt";
+  BufReader::new(
+    File::open(english_trigrams_file).expect("Failed to open english trigrams freq table file"),
+  )
+  .lines()
+  .take(1000)
+  .map(|v| v.expect("Failed to read line from english trigrams freq table file"))
+  .map(|v| (v.split_at(3).0.to_owned(), v.split_at(4).1.to_owned()))
+  .map(|(v1, v2)| (v1, u64::from_str_radix(&v2, 10).unwrap()))
+  .collect::<HashMap<String, u64>>()
+}
+
+fn digram_frequency_table() -> HashMap<String, u64> {
+  let english_trigrams_file = "./res/english_digrams.txt";
+  BufReader::new(
+    File::open(english_trigrams_file).expect("Failed to open english digrams freq table file"),
+  )
+  .lines()
+  .take(1000)
+  .map(|v| v.expect("Failed to read line from english trigrams freq table file"))
+  .map(|v| (v.split_at(2).0.to_owned(), v.split_at(3).1.to_owned()))
+  .map(|(v1, v2)| (v1, u64::from_str_radix(&v2, 10).unwrap()))
+  .collect::<HashMap<String, u64>>()
 }
 
 pub fn challenge_1() {
@@ -182,7 +240,7 @@ I go crazy when I hear a cymbal";
   println!(
     "Expected:\n\"0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f\""
   );
-  println!("Actual:\n{:?}",res.to_ascii_lowercase());
+  println!("Actual:\n{:?}", res.to_ascii_lowercase());
 }
 
 #[allow(dead_code)]
@@ -262,14 +320,14 @@ pub fn challenge_6() {
     }
   }
   println!("Challenge: Break repeating-key XOR");
-  println!("Input: {:?}",input_file);
-  println!("Guess Key size: {:?}",best_solution.1);
-  println!("Guess Key: {:?}",best_solution.2.0);
+  println!("Input: {:?}", input_file);
+  println!("Guess Key size: {:?}", best_solution.1);
+  println!("Guess Key: {:?}", best_solution.2.0);
   println!("Actual Key size: 29");
   println!("Actual Key: \"Terminator X: Bring the noise\"");
-  println!("Plaintext:\n{}","-".repeat(16));
-  print!("{}",best_solution.2.1);
-  println!("{}","-".repeat(16));
+  println!("Plaintext:\n{}", "-".repeat(16));
+  print!("{}", best_solution.2.1);
+  println!("{}", "-".repeat(16));
 }
 #[allow(dead_code)]
 pub fn challenge_7() {
@@ -291,11 +349,8 @@ pub fn challenge_7() {
   let plaintext = cryptog::aes_128_ecb_decrypt("YELLOW SUBMARINE".as_bytes(), &ciphertext_bytes)
     .expect("Failed to decrypt input file from challenge 7");
   println!("Challenge: AES in ECB mode");
-  println!("Input: {:?}",input_file);
-  println!(
-    "Plaintext:\n{}",
-    String::from_utf8(plaintext).unwrap()
-  );
+  println!("Input: {:?}", input_file);
+  println!("Plaintext:\n{}", String::from_utf8(plaintext).unwrap());
 }
 
 #[allow(dead_code)]
@@ -322,18 +377,18 @@ pub fn challenge_8() {
     if chunks.len() == size {
       continue;
     }
-    best_guess_idx = idx+1;
+    best_guess_idx = idx + 1;
     best_guess_len = chunks.len();
   }
 
   println!("Challenge: Detect AES in ECB mode");
-  println!("Input: {:?}",input_file);
+  println!("Input: {:?}", input_file);
   println!(
     "Best guess line {} with {} chunks of 16 bytes instead of 10 chunks",
     best_guess_idx, best_guess_len,
   );
   println!("Actual line: 133");
-  println!("Actual unique sequence size: {} chunks of 16 bytes",7);
+  println!("Actual unique sequence size: {} chunks of 16 bytes", 7);
 }
 
 pub fn challenge_9() {
@@ -341,8 +396,8 @@ pub fn challenge_9() {
   let res = cryptog::pkcs7_padding(input.as_bytes().to_owned(), 20);
   println!("Challenge: Implement PKCS#7 padding");
   println!("Input: {:?}", input);
-  println!("Expected: {:?}",input.to_owned()+&String::from_utf8(vec![4;4]).unwrap());
-  println!("Expected: {:?}",String::from_utf8(res).unwrap());
+  println!("Expected: {:?}", input.to_owned() + &String::from_utf8(vec![4; 4]).unwrap());
+  println!("Expected: {:?}", String::from_utf8(res).unwrap());
 }
 
 #[allow(dead_code)]
@@ -363,12 +418,11 @@ pub fn challenge_10() {
     .expect("Failed to decode Base64 string from input file for challenge 10");
   let key = "YELLOW SUBMARINE";
   let iv = vec![0; 16];
-  let plaintext_bytes =
-    cryptog::aes_cbc_decrypt(&iv,key.as_bytes(), &ciphertext_bytes).unwrap();
+  let plaintext_bytes = cryptog::aes_cbc_decrypt(&iv, key.as_bytes(), &ciphertext_bytes).unwrap();
   println!("Challenge: Implement CBC mode");
-  println!("Input: {:?}",input_file);
-  println!("Key: {:?}",key);
-  println!("IV: {:?}",String::from_utf8(iv).unwrap());
+  println!("Input: {:?}", input_file);
+  println!("Key: {:?}", key);
+  println!("IV: {:?}", String::from_utf8(iv).unwrap());
   println!("Plaintext:");
   println!("{}", String::from_utf8(plaintext_bytes).unwrap());
 }
@@ -381,8 +435,8 @@ pub fn challenge_11() {
 
   let guess = if is_ecb { "ECB".to_owned() } else { "CBC".to_owned() };
   println!("Challenge: ECB/CBC detection oracle");
-  println!("Expected: {:?}",mode);
-  println!("Guess: {:?}",guess);
+  println!("Expected: {:?}", mode);
+  println!("Guess: {:?}", guess);
 }
 
 #[allow(dead_code)]
@@ -412,7 +466,7 @@ pub fn challenge_12() {
   println!("Actual Unknown String size: 138 bytes");
   println!("Unknown string guess size: {} bytes", unknown_string_size);
   println!("Plaintext guess:");
-  println!("{}","-".repeat(20));
+  println!("{}", "-".repeat(20));
   print!("{}", guess);
 }
 
@@ -460,7 +514,7 @@ pub fn challenge_14() {
   println!("Actual Unknown String size: 138 bytes");
   println!("Unknown string guess size: {} bytes", unknown_string_size);
   println!("Plaintext guess:");
-  println!("{}","-".repeat(20));
+  println!("{}", "-".repeat(20));
   print!("{}", guess);
 }
 
@@ -473,14 +527,14 @@ pub fn challenge_15() {
   let incorrect_guess_2 = cryptog::validate_undo_pkcs7_padding(input_incorrect_1.as_bytes());
 
   println!("Challenge: PKCS#7 padding validation");
-  println!("Input correct: {:?}",input_correct);
-  println!("Input incorrect 1: {:?}",input_incorrect_1);
-  println!("Input incorrect 2: {:?}",input_incorrect_2);
+  println!("Input correct: {:?}", input_correct);
+  println!("Input incorrect 1: {:?}", input_incorrect_1);
+  println!("Input incorrect 2: {:?}", input_incorrect_2);
   println!("Actual validation:");
-  println!("Input correct result: {:?}",correct_guess);
+  println!("Input correct result: {:?}", correct_guess);
   println!("Input correct unpadded: {:?}", String::from_utf8(correct_guess.unwrap()).unwrap());
-  println!("Input incorrect 1 result: {:?}",incorrect_guess_1);
-  println!("Input incorrect 2 result: {:?}",incorrect_guess_2)
+  println!("Input incorrect 1 result: {:?}", incorrect_guess_1);
+  println!("Input incorrect 2 result: {:?}", incorrect_guess_2)
 }
 
 #[allow(dead_code)]
@@ -516,20 +570,104 @@ pub fn challenge_16() {
   );
 }
 
-pub fn challenge_17(){
+pub fn challenge_17() {
   let oracle_key: Vec<u8> = rand::random_iter().take(16).collect();
-  let (ciphertext,iv) = oracle::oracle_cbc_padding(&oracle_key);
-  let plaintext = oracle_hacker::cbc_padding_attack(&iv, &ciphertext, |token:&[u8]| oracle::oracle_cbc_padding_validator(token, &iv, &oracle_key));
+  let (ciphertext, iv) = oracle::oracle_cbc_padding(&oracle_key);
+  let plaintext = oracle_hacker::cbc_padding_attack(&iv, &ciphertext, |token: &[u8]| {
+    oracle::oracle_cbc_padding_validator(token, &iv, &oracle_key)
+  });
   println!("Challenge: The CBC padding oracle");
-  println!("Plaintext: {:?}",plaintext);
+  println!("Plaintext: {:?}", plaintext);
 }
 
-pub fn challenge_18(){
+pub fn challenge_18() {
   let input = "L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyMTJULu/6/kXX0KSvoOLSFQ==";
-  let input_bytes = BASE64_STANDARD.decode(input).expect("Failed to decode base64 challenge 18 input");
+  let input_bytes =
+    BASE64_STANDARD.decode(input).expect("Failed to decode base64 challenge 18 input");
   let key = "YELLOW SUBMARINE".as_bytes().to_owned();
   let nonce = 0;
 
   let res = cryptog::aes_ctr(nonce, &key, &input_bytes);
-  println!("{:?}",String::from_utf8(res));
+  println!("Challenge: Implement AES 128 Bit CTR");
+  println!("Input: {:?}", input);
+  println!("Plaintext: {:?}", String::from_utf8(res));
+}
+
+pub fn challenge_19() {
+  let trigram_freq_table = trigram_frequency_table();
+  let digram_freq_table = digram_frequency_table();
+
+  let input_file = "res/challenge_19.txt";
+  // let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n\r".to_owned();
+  let valid_chars = "abcdefghijklmnopqrstuvwxyz !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`".to_owned();
+  let lines_bytes: Vec<Vec<u8>> =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 19"))
+      .lines()
+      .map(|v| v.expect("Failed to read a line in the input file for challenge 19"))
+      .map(|v| {
+        BASE64_STANDARD
+          .decode(v)
+          .expect("Failed to decode a line in the input file for challenge 19")
+      })
+      .collect();
+  let nonce = 0u64;
+  let key: Vec<u8> = rand::random_iter().take(16).collect();
+  let mut ciphertexts = vec![];
+  for line_bytes in lines_bytes {
+    ciphertexts.push(cryptog::aes_ctr(nonce, &key, &line_bytes));
+  }
+  let mut guess_key: Vec<u8> = vec![];
+  let mut scores: BTreeMap<u64, u8> = BTreeMap::new();
+  let max_size = ciphertexts.iter().map(|v| v.len()).max().unwrap();
+  for _ in 0..max_size {
+    let mut temp_key = guess_key.clone();
+    temp_key.push(0);
+    let idx = temp_key.len() - 1;
+    for byte_value in 0..=255 {
+      temp_key[idx] = byte_value;
+      let guesses: Vec<Result<String, FromUtf8Error>> = ciphertexts
+        .iter()
+        .map(|v| {
+          String::from_utf8(xor::xor_repeating_key(&temp_key, &(*v)[0..=idx.min(v.len() - 1)]))
+        })
+        .collect();
+      if guesses
+        .iter()
+        .any(|v| v.is_err() || v.clone().unwrap().chars().any(|c| !valid_chars.contains(c)))
+      {
+        if idx == 4
+          && guesses.iter().all(|v| {
+            v.is_ok() && v.clone().unwrap().chars().all(|c| c.is_ascii_graphic() || c == ' ')
+            && v.clone().unwrap().chars().all(|c| !"|*&^%".contains(c))
+          })
+        {
+          dbg!(guesses);
+        }
+        continue;
+      }
+      let score = guesses
+        .iter()
+        .map(|v| v.clone().unwrap())
+        .map(|v| {
+          character_frequency_score(v.clone())
+            + trigram_frequency_score(&trigram_freq_table, v.clone())
+            + digram_frequency_score(&digram_freq_table, v)
+        })
+        .sum::<u64>();
+      scores.insert(score, byte_value);
+    }
+    let (score, top_guess_byte) = scores.iter().last().unwrap();
+    dbg!(score);
+    guess_key.push(*top_guess_byte);
+    scores.clear();
+  }
+  dbg!(htb64::bytes_to_hex(&guess_key.clone()));
+  for (idx, ct) in ciphertexts.iter().enumerate() {
+    println!(
+      "Line {}: {:?}",
+      idx,
+      String::from_utf8(xor::xor_repeating_key(&guess_key, ct)).unwrap()
+    );
+  }
+  dbg!(String::from_utf8(xor::xor_repeating_key(&guess_key, &ciphertexts[37])));
 }
