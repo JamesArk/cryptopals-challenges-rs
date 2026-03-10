@@ -53,7 +53,7 @@ fn character_frequency_score(sample: String) -> u64 {
     (b'Z', 7),
   ]);
   let mut sample_freq_table: HashMap<u8, u64> = HashMap::new();
-  let size = sample.len();
+  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
   sample.to_ascii_uppercase().as_bytes().iter().filter(|c| c.is_ascii_alphabetic()).for_each(|c| {
     sample_freq_table.entry(c.to_ascii_uppercase()).and_modify(|v| *v += 1).or_insert(1);
   });
@@ -66,11 +66,11 @@ fn character_frequency_score(sample: String) -> u64 {
     })
     .sum::<u64>()
     * 10000
-    / (1270 * size as u64)
+    / total_points
 }
 
 fn trigram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
-  let size = sample.len();
+  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
   sample
     .to_ascii_uppercase()
     .chars()
@@ -79,11 +79,11 @@ fn trigram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) ->
     .map(|v| freq_table.get(&v).unwrap_or(&0u64))
     .sum::<u64>()
     * 10000
-    / (77534223 * size as u64)
+    / total_points
 }
 
 fn digram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
-  let size = sample.len();
+  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
   sample
     .to_ascii_uppercase()
     .chars()
@@ -92,7 +92,7 @@ fn digram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> 
     .map(|v| freq_table.get(&v).unwrap_or(&0u64))
     .sum::<u64>()
     * 10000
-    / (116997844 * size as u64)
+    / total_points
 }
 
 fn trigram_frequency_table() -> HashMap<String, u64> {
@@ -101,7 +101,6 @@ fn trigram_frequency_table() -> HashMap<String, u64> {
     File::open(english_trigrams_file).expect("Failed to open english trigrams freq table file"),
   )
   .lines()
-  .take(1000)
   .map(|v| v.expect("Failed to read line from english trigrams freq table file"))
   .map(|v| (v.split_at(3).0.to_owned(), v.split_at(4).1.to_owned()))
   .map(|(v1, v2)| (v1, u64::from_str_radix(&v2, 10).unwrap()))
@@ -114,7 +113,6 @@ fn digram_frequency_table() -> HashMap<String, u64> {
     File::open(english_trigrams_file).expect("Failed to open english digrams freq table file"),
   )
   .lines()
-  .take(1000)
   .map(|v| v.expect("Failed to read line from english trigrams freq table file"))
   .map(|v| (v.split_at(2).0.to_owned(), v.split_at(3).1.to_owned()))
   .map(|(v1, v2)| (v1, u64::from_str_radix(&v2, 10).unwrap()))
@@ -599,7 +597,7 @@ pub fn challenge_19() {
 
   let input_file = "res/challenge_19.txt";
   // let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n\r".to_owned();
-  let valid_chars = "abcdefghijklmnopqrstuvwxyz !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`".to_owned();
+  let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ -',.?:;".to_owned();
   let lines_bytes: Vec<Vec<u8>> =
     BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 19"))
       .lines()
@@ -616,17 +614,18 @@ pub fn challenge_19() {
   for line_bytes in lines_bytes {
     ciphertexts.push(cryptog::aes_ctr(nonce, &key, &line_bytes));
   }
-  let mut guess_key: Vec<u8> = vec![];
+  let mut guess_keystream: Vec<u8> = vec![];
   let mut scores: BTreeMap<u64, u8> = BTreeMap::new();
   let max_size = ciphertexts.iter().map(|v| v.len()).max().unwrap();
   for _ in 0..max_size {
-    let mut temp_key = guess_key.clone();
+    let mut temp_key = guess_keystream.clone();
     temp_key.push(0);
     let idx = temp_key.len() - 1;
     for byte_value in 0..=255 {
       temp_key[idx] = byte_value;
       let guesses: Vec<Result<String, FromUtf8Error>> = ciphertexts
         .iter()
+        .filter(|v| idx < v.len())
         .map(|v| {
           String::from_utf8(xor::xor_repeating_key(&temp_key, &(*v)[0..=idx.min(v.len() - 1)]))
         })
@@ -635,14 +634,6 @@ pub fn challenge_19() {
         .iter()
         .any(|v| v.is_err() || v.clone().unwrap().chars().any(|c| !valid_chars.contains(c)))
       {
-        if idx == 4
-          && guesses.iter().all(|v| {
-            v.is_ok() && v.clone().unwrap().chars().all(|c| c.is_ascii_graphic() || c == ' ')
-            && v.clone().unwrap().chars().all(|c| !"|*&^%".contains(c))
-          })
-        {
-          dbg!(guesses);
-        }
         continue;
       }
       let score = guesses
@@ -650,24 +641,23 @@ pub fn challenge_19() {
         .map(|v| v.clone().unwrap())
         .map(|v| {
           character_frequency_score(v.clone())
-            + trigram_frequency_score(&trigram_freq_table, v.clone())
-            + digram_frequency_score(&digram_freq_table, v)
+            + trigram_frequency_score(&trigram_freq_table, v.clone())/100
+            + digram_frequency_score(&digram_freq_table, v)/100
         })
         .sum::<u64>();
       scores.insert(score, byte_value);
     }
     let (score, top_guess_byte) = scores.iter().last().unwrap();
-    dbg!(score);
-    guess_key.push(*top_guess_byte);
+    guess_keystream.push(*top_guess_byte);
     scores.clear();
   }
-  dbg!(htb64::bytes_to_hex(&guess_key.clone()));
-  for (idx, ct) in ciphertexts.iter().enumerate() {
+  println!("Challenge: Break fixed-nonce CTR mode using substitutions");
+  println!("Keystream hex: {:?}",htb64::bytes_to_hex(&guess_keystream.clone()));
+  println!("Plaintext:");
+  for ct in ciphertexts {
     println!(
-      "Line {}: {:?}",
-      idx,
-      String::from_utf8(xor::xor_repeating_key(&guess_key, ct)).unwrap()
+      "{:?}",
+      String::from_utf8(xor::xor_repeating_key(&guess_keystream, &ct)).unwrap()
     );
   }
-  dbg!(String::from_utf8(xor::xor_repeating_key(&guess_key, &ciphertexts[37])));
 }
