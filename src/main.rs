@@ -28,6 +28,7 @@ fn main() {
     challenges::challenge_17,
     challenges::challenge_18,
     challenges::challenge_19,
+    challenges::challenge_20,
   ];
 
   let args:Vec<String> = env::args().collect();
@@ -35,21 +36,11 @@ fn main() {
     challenges_vec.len() as i32
   } else if args[1].chars().all(|v| v.is_digit(10)) {
     args[1].parse::<i32>().unwrap()
-  } else if args[1].to_ascii_lowercase() == "all" {
-      -1
   } else {
-    println!("Please specify 'all' or a number for the challenge");
+    println!("Please specify a number from {} to {} for the challenge",1,challenges_vec.len());
     return;
   };
-  if challenge == -1 {
-    for (idx,f) in challenges_vec.iter().enumerate() {
-      let line = format!("{}CHALLENGE {}{}","-".repeat(16),idx+1,"-".repeat(16));
-      println!("{}",line);
-      f();
-      println!("{}","-".repeat(line.len()));
-    }
-    return;
-  } else if challenge > challenges_vec.len() as i32 || challenge < -1 {
+  if challenge > challenges_vec.len() as i32 || challenge < 1 {
     println!("Challenge not available");
     return;
   }

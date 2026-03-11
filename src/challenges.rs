@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::slice;
+use std::io::stdin;
 use std::string::FromUtf8Error;
 
 use base64::Engine;
@@ -53,7 +53,7 @@ fn character_frequency_score(sample: String) -> u64 {
     (b'Z', 7),
   ]);
   let mut sample_freq_table: HashMap<u8, u64> = HashMap::new();
-  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
+  let total_points: u64 = freq_table.iter().map(|(_, v)| v).sum();
   sample.to_ascii_uppercase().as_bytes().iter().filter(|c| c.is_ascii_alphabetic()).for_each(|c| {
     sample_freq_table.entry(c.to_ascii_uppercase()).and_modify(|v| *v += 1).or_insert(1);
   });
@@ -70,7 +70,7 @@ fn character_frequency_score(sample: String) -> u64 {
 }
 
 fn trigram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
-  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
+  let total_points: u64 = freq_table.iter().map(|(_, v)| v).sum();
   sample
     .to_ascii_uppercase()
     .chars()
@@ -83,7 +83,7 @@ fn trigram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) ->
 }
 
 fn digram_frequency_score(freq_table: &HashMap<String, u64>, sample: String) -> u64 {
-  let total_points:u64 = freq_table.iter().map(|(_,v)| v).sum();
+  let total_points: u64 = freq_table.iter().map(|(_, v)| v).sum();
   sample
     .to_ascii_uppercase()
     .chars()
@@ -592,12 +592,76 @@ pub fn challenge_18() {
 }
 
 pub fn challenge_19() {
+  let input_file = "res/challenge_19.txt";
+  let nonce = 0u64;
+  let key: Vec<u8> = rand::random_iter().take(16).collect();
+  let ciphertexts: Vec<Vec<u8>> =
+    BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 19"))
+      .lines()
+      .map(|v| {
+        BASE64_STANDARD
+          .decode(v.expect("Failed to read a line in the input file for challenge 19"))
+          .expect("Failed to decode a line in the input file for challenge 19")
+      })
+      .map(|v| cryptog::aes_ctr(nonce, &key, &v))
+      .collect();
+
+  let stdin = stdin();
+  println!("Enter a '<number> <String>' as a guess:");
+  for line in stdin.lines() {
+    let l = line.unwrap();
+    if l == "quit" {
+      return;
+    }
+    let (idx_string, guess) = l.split_once(" ").unwrap();
+    let idx_res = idx_string.parse::<usize>();
+    if idx_res.is_err() {
+      println!("{:?}", idx_res.err().unwrap());
+      continue;
+    }
+    let idx = idx_res.unwrap();
+    if idx >= ciphertexts.len() {
+      println!("{} is too large, choose between {} and {} ", idx, 0, ciphertexts.len() - 1);
+      continue;
+    }
+    let ciphertext = ciphertexts[idx].clone();
+    let keystream =
+      xor::xor_repeating_key(guess.as_bytes(), &ciphertext[0..guess.as_bytes().len()]);
+
+    let transformed: Vec<Result<String,FromUtf8Error>> = ciphertexts.clone()
+      .into_iter()
+      .map(|v| {
+        if v.len() < keystream.len() {
+          (v, vec![])
+        }else{
+          (v[0..keystream.len()].to_vec(), v[keystream.len()..v.len()].to_vec())
+        }
+
+      })
+      .map(|(v1,v2)| (xor::xor_repeating_key(&keystream, &v1),vec![b'?';v2.len()]))
+      .map(|(v1,v2)| {
+        let mut v = vec![];
+        v.append(&mut v1.clone());
+        v.append(&mut v2.clone());
+        String::from_utf8(v)
+      })
+      .collect();
+    if transformed.iter().any(|v| v.is_err()) {
+      println!("Guess created invalid utf8 strings");
+      continue;
+    }
+    for (idx,l) in transformed.iter().map(|v|v.clone().unwrap()).enumerate() {
+      println!("Line {:02}: {:?}",idx,l);
+    }
+  }
+}
+
+pub fn challenge_20() {
   let trigram_freq_table = trigram_frequency_table();
   let digram_freq_table = digram_frequency_table();
 
-  let input_file = "res/challenge_19.txt";
-  // let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n\r".to_owned();
-  let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ -',.?:;".to_owned();
+  let input_file = "res/challenge_20.txt";
+  let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@$%^&*()-_+=[{}]'\"\t<>,./?\\|:;`~\n\r".to_owned();
   let lines_bytes: Vec<Vec<u8>> =
     BufReader::new(File::open(input_file).expect("Failed to open input file for challenge 19"))
       .lines()
@@ -625,7 +689,7 @@ pub fn challenge_19() {
       temp_key[idx] = byte_value;
       let guesses: Vec<Result<String, FromUtf8Error>> = ciphertexts
         .iter()
-        .filter(|v| idx < v.len())
+        // .filter(|v| idx < v.len())
         .map(|v| {
           String::from_utf8(xor::xor_repeating_key(&temp_key, &(*v)[0..=idx.min(v.len() - 1)]))
         })
@@ -636,28 +700,22 @@ pub fn challenge_19() {
       {
         continue;
       }
-      let score = guesses
-        .iter()
-        .map(|v| v.clone().unwrap())
-        .map(|v| {
-          character_frequency_score(v.clone())
-            + trigram_frequency_score(&trigram_freq_table, v.clone())/100
-            + digram_frequency_score(&digram_freq_table, v)/100
-        })
-        .sum::<u64>();
+      let res: String = guesses.iter().map(|v| v.clone().unwrap()).collect();
+      let score = (character_frequency_score(res.clone())
+        + trigram_frequency_score(&trigram_freq_table, res.clone())
+        + digram_frequency_score(&digram_freq_table, res.clone()))
+        * 100
+        / 3;
       scores.insert(score, byte_value);
     }
-    let (score, top_guess_byte) = scores.iter().last().unwrap();
+    let (_, top_guess_byte) = scores.iter().last().unwrap();
     guess_keystream.push(*top_guess_byte);
     scores.clear();
   }
-  println!("Challenge: Break fixed-nonce CTR mode using substitutions");
-  println!("Keystream hex: {:?}",htb64::bytes_to_hex(&guess_keystream.clone()));
+  println!("Challenge: Break fixed-nonce CTR statistically");
+  println!("Keystream hex: {:?}", htb64::bytes_to_hex(&guess_keystream.clone()));
   println!("Plaintext:");
   for ct in ciphertexts {
-    println!(
-      "{:?}",
-      String::from_utf8(xor::xor_repeating_key(&guess_keystream, &ct)).unwrap()
-    );
+    println!("{:?}", String::from_utf8(xor::xor_repeating_key(&guess_keystream, &ct)).unwrap());
   }
 }
